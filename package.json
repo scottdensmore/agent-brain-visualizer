@@ -10,7 +10,7 @@
     "e2e:report": "playwright show-report"
   },
   "devDependencies": {
-    "@playwright/test": "^1.49.1",
+    "@playwright/test": "^1.62.0",
     "jsdom": "^25.0.1",
     "vitest": "^2.1.8"
   }
