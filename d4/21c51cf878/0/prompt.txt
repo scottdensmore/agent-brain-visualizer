@@ -362,3 +362,7 @@ To re-run with edited post-processing: Workflow({scriptPath: '/home/scottdensmor
 ---
 
 yes start there
+
+---
+
+The signing problem is fixed so sign and move on
