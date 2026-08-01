@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "68e51ae4073d",
+  "strategy": "manual-commit",
+  "branch": "security-patches-round-2",
+  "checkpoints_count": 16,
+  "files_touched": [
+    "src/main/java/io/github/glaforge/agybrainviz/AnalysisOrchestrator.java",
+    "src/test/java/io/github/glaforge/agybrainviz/AnalysisControllerTest.java"
+  ],
+  "sessions": [
+    {
+      "metadata": "/68/e51ae4073d/0/metadata.json",
+      "transcript": "/68/e51ae4073d/0/full.jsonl",
+      "compact_transcript": "/68/e51ae4073d/0/transcript.jsonl",
+      "content_hash": "/68/e51ae4073d/0/content_hash.txt",
+      "prompt": "/68/e51ae4073d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2179,
+    "cache_creation_tokens": 2169617,
+    "cache_read_tokens": 58657995,
+    "output_tokens": 241406,
+    "api_call_count": 311
+  }
+}
