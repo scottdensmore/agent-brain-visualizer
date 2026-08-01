@@ -21,6 +21,22 @@ import {
   formatTime,
 } from "./utils.js";
 
+/**
+ * Largest step body the content scanners below will run over.
+ *
+ * Those scanners pick transcript text apart with lazy regexes (`([\s\S]*?)`, `(.*?)`), each of
+ * which restarts a scan to end-of-string from every construct that opens and never closes — so
+ * their cost is quadratic in the length of the content, on the browser's main thread. Transcript
+ * text is untrusted: it is whatever the agent read, whether a web page, a repository file, or a
+ * session pushed to the ingest API. Since the newest session is auto-selected on load, one
+ * pathological step would otherwise hang the tab on every page load.
+ *
+ * Measured against the worst scanner (the `@[file]` mention scan) on content of repeated unclosed
+ * openings: 8 KiB costs 40ms, 16 KiB 281ms, 32 KiB 1.1s, 64 KiB 4.0s. 16 KiB keeps the worst case
+ * to roughly a quarter second while sitting well above any ordinary step body.
+ */
+const MAX_ENRICHED_CONTENT = 16 * 1024;
+
 export function renderTranscript(steps, container) {
   state.activeFilters = {
     userQueries: false,
@@ -185,12 +201,24 @@ export function renderTranscript(steps, container) {
 
       if (step.content) {
         let formattedContent;
-        if (
+        const enrichable =
           step.type === "USER_INPUT" ||
           step.type === "PLANNER_RESPONSE" ||
           step.type === "MESSAGE" ||
-          step.type === "SEARCH_WEB"
-        ) {
+          step.type === "SEARCH_WEB";
+        if (enrichable && step.content.length > MAX_ENRICHED_CONTENT) {
+          // Every scanner below is quadratic on content that opens a construct and never closes it,
+          // and transcript text is whatever the agent read — a web page, a repo file, a pushed
+          // session. Measured on the worst of them (the @[file] mention scan), 16 KiB of unclosed
+          // openings costs ~280ms and 64 KiB costs ~4s, on the main thread, for every render. Past
+          // this size the content is still shown in full, just without the enrichment: no @[file]
+          // links, collapsible tag sections, or citation superscripts.
+          formattedContent =
+            `<div class="oversized-step-note">Large step (${Math.round(
+              step.content.length / 1024
+            )} KB) — shown as plain text.</div>` +
+            `<div class="markdown-body">${renderMarkdown(step.content)}</div>`;
+        } else if (enrichable) {
           let processedContent = step.content;
           if (step.type === "USER_INPUT") {
             let fileMap = {};
