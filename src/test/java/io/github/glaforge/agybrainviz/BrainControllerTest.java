@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -192,6 +193,79 @@ class BrainControllerTest implements TestPropertyProvider {
         Files.writeString(geminiFile, "hello file");
 
         assertEquals("hello file", get("/api/brain/file?path=" + geminiFile));
+    }
+
+    /**
+     * The Gemini CLI keeps its credentials in the same directory the preview sandboxes to, so
+     * "inside ~/.gemini" was never a good enough reason to serve a file. These refusals hold
+     * whatever a transcript claims: pushing a session that links a credential file is exactly how an
+     * earlier attempt at this fix was defeated.
+     */
+    @Test
+    void fileIsForbiddenForCredentialsAtTheSandboxRoot() throws IOException {
+        for (String name : List.of(
+            "oauth_creds.json",
+            "google_accounts.json",
+            "settings.json",
+            "mcp-oauth-tokens.json",
+            ".env"
+        )) {
+            Path creds = tempHome.resolve(".gemini").resolve(name);
+            Files.createDirectories(creds.getParent());
+            Files.writeString(creds, "refresh_token=SUPER-SECRET");
+
+            HttpClientResponseException ex = assertThrows(
+                HttpClientResponseException.class,
+                () -> get("/api/brain/file?path=" + creds),
+                name + " must not be previewable"
+            );
+            assertEquals(HttpStatus.FORBIDDEN, ex.getStatus(), name);
+        }
+    }
+
+    @Test
+    void fileIsForbiddenForADotDirectoryInsideTheSandbox() throws IOException {
+        Path token = tempHome.resolve(".gemini").resolve(".credentials").resolve("token.json");
+        Files.createDirectories(token.getParent());
+        Files.writeString(token, "token");
+
+        HttpClientResponseException ex = assertThrows(
+            HttpClientResponseException.class,
+            () -> get("/api/brain/file?path=" + token)
+        );
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
+    }
+
+    @Test
+    void fileIsForbiddenForASymlinkInsideTheSandboxAimedAtCredentials() throws IOException {
+        Path creds = tempHome.resolve(".gemini").resolve("oauth_creds.json");
+        Files.createDirectories(creds.getParent());
+        Files.writeString(creds, "refresh_token=SUPER-SECRET");
+        Path link = tempHome.resolve(".gemini").resolve("harmless.txt");
+        Files.createSymbolicLink(link, creds);
+
+        // Both ends are inside the sandbox, so only the deny check on the resolved path catches it.
+        HttpClientResponseException ex = assertThrows(
+            HttpClientResponseException.class,
+            () -> get("/api/brain/file?path=" + link)
+        );
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
+    }
+
+    @Test
+    void fileStillServesSessionDataUnderTheBrainSubtree() throws IOException {
+        // The layout the preview exists for: agent-ingest scans ~/.gemini/<source>/brain (see
+        // cli/internal/scan/scan.go). JSON there is session data, not CLI credentials.
+        Path sessionFile = tempHome
+            .resolve(".gemini")
+            .resolve("antigravity-cli")
+            .resolve("brain")
+            .resolve("sess-1")
+            .resolve("state.json");
+        Files.createDirectories(sessionFile.getParent());
+        Files.writeString(sessionFile, "{\"step\":1}");
+
+        assertEquals("{\"step\":1}", get("/api/brain/file?path=" + sessionFile));
     }
 
     @Test
