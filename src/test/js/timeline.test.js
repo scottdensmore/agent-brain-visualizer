@@ -130,6 +130,53 @@ describe("renderTranscript", () => {
     expect(container.querySelector(".markdown-body").textContent).toContain("@[");
   });
 
+  // The first version of the cap guarded only the four "enrichable" step types. Tool steps —
+  // RUN_COMMAND, FUNCTION_OUTPUT, VIEW_FILE — took a different branch whose metadata and status
+  // scanners are quadratic too, and that branch is the easier one for a pushed session to reach.
+  it("bounds the metadata and status scanners on tool steps too", () => {
+    // A long newline run after a metadata header: the status scanner used to re-anchor at every
+    // line start and walk the whole run, at ~760ms per step of this size.
+    const hostile = "Created At: 2026-01-01\nx" + "\n".repeat(120_000) + "x";
+    const steps = [
+      { type: "RUN_COMMAND", source: "MODEL", content: hostile, created_at: "2026-06-19T10:00:00Z" },
+      { type: "FUNCTION_OUTPUT", source: "MODEL", content: hostile, created_at: "2026-06-19T10:00:01Z" },
+      { type: "VIEW_FILE", source: "MODEL", content: hostile, created_at: "2026-06-19T10:00:02Z" },
+    ];
+
+    const started = performance.now();
+    renderTranscript(steps, container);
+    for (let i = 0; i < steps.length; i++) expandCard(i);
+    const elapsed = performance.now() - started;
+
+    expect(elapsed).toBeLessThan(2000);
+    // Oversized, so each renders as an escaped code block rather than markdown — a file dump must
+    // not be reinterpreted — and the content is still all there.
+    expect(container.querySelectorAll(".oversized-step-note")).toHaveLength(3);
+    expect(container.querySelector(".code-block").textContent).toContain("Created At: 2026-01-01");
+  });
+
+  it("still reads the metadata header on a tool step under the limit", () => {
+    const steps = [
+      {
+        type: "RUN_COMMAND",
+        source: "MODEL",
+        content:
+          "Created At: 2026-06-19T10:00:00Z\nCompleted At: 2026-06-19T10:00:04Z\n" +
+          "The command completed successfully.\nbuild output",
+        created_at: "2026-06-19T10:00:00Z",
+      },
+    ];
+
+    renderTranscript(steps, container);
+    expandCard();
+
+    expect(container.querySelector(".oversized-step-note")).toBeNull();
+    const meta = container.querySelector(".tool-meta-header");
+    expect(meta.textContent).toContain("Duration:");
+    expect(meta.textContent).toContain("The command completed successfully.");
+    expect(container.querySelector(".code-block").textContent).toContain("build output");
+  });
+
   it("still enriches a step body that sits under the scan limit", () => {
     const steps = [
       {

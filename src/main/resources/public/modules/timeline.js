@@ -37,6 +37,18 @@ import {
  */
 const MAX_ENRICHED_CONTENT = 16 * 1024;
 
+/**
+ * How much of a step body the `Created At:` / `Completed At:` / error metadata scanner may look at.
+ *
+ * That scanner is anchored to the start of the content and matches at most three short header
+ * lines, but its `\s*(.*?)\n` pairs backtrack quadratically over a long whitespace run. Bounding
+ * the input rather than rewriting the pattern keeps its exact behaviour — including the case where
+ * a label's value sits on the following line, which a `[ \t]*` rewrite silently stops extracting —
+ * while making the cost independent of how long the content is. Real headers are three timestamps;
+ * 4 KiB is far more than any of them needs.
+ */
+const MAX_META_HEADER_SCAN = 4 * 1024;
+
 export function renderTranscript(steps, container) {
   state.activeFilters = {
     userQueries: false,
@@ -206,18 +218,28 @@ export function renderTranscript(steps, container) {
           step.type === "PLANNER_RESPONSE" ||
           step.type === "MESSAGE" ||
           step.type === "SEARCH_WEB";
-        if (enrichable && step.content.length > MAX_ENRICHED_CONTENT) {
+        if (step.content.length > MAX_ENRICHED_CONTENT) {
           // Every scanner below is quadratic on content that opens a construct and never closes it,
           // and transcript text is whatever the agent read — a web page, a repo file, a pushed
           // session. Measured on the worst of them (the @[file] mention scan), 16 KiB of unclosed
           // openings costs ~280ms and 64 KiB costs ~4s, on the main thread, for every render. Past
-          // this size the content is still shown in full, just without the enrichment: no @[file]
-          // links, collapsible tag sections, or citation superscripts.
-          formattedContent =
-            `<div class="oversized-step-note">Large step (${Math.round(
-              step.content.length / 1024
-            )} KB) — shown as plain text.</div>` +
-            `<div class="markdown-body">${renderMarkdown(step.content)}</div>`;
+          // this size the content is still shown in full, just without the parsing: no @[file]
+          // links, collapsible tag sections, citation superscripts, or metadata header.
+          //
+          // This guard covers EVERY step type, not just the enrichable ones. Guarding only the
+          // enrichable branch is the mistake the first version of this cap made: the metadata and
+          // status scanners in the branch below are quadratic too, and they run for RUN_COMMAND,
+          // FUNCTION_OUTPUT and every other tool step, which is the far easier shape to reach.
+          const note = `<div class="oversized-step-note">Large step (${Math.round(
+            step.content.length / 1024
+          )} KB) — shown as plain text.</div>`;
+          // Degrade to whatever the branch would otherwise have produced: markdown for prose steps,
+          // an escaped code block for tool output, so a large file dump is not reinterpreted.
+          formattedContent = enrichable
+            ? note +
+              `<div class="markdown-body">${renderMarkdown(step.content)}</div>`
+            : note +
+              `<div class="code-block">${escapeHtml(step.content)}</div>`;
         } else if (enrichable) {
           let processedContent = step.content;
           if (step.type === "USER_INPUT") {
@@ -296,7 +318,9 @@ export function renderTranscript(steps, container) {
               // Extract standard tool metadata
               const metaRegex =
                 /^(?:Created At:\s*(.*?)\n)?(?:Completed At:\s*(.*?)\n)?(?:Encountered error in step execution:\s*(.*?\n))?/;
-              const match = contentText.match(metaRegex);
+              const match = contentText
+                .slice(0, MAX_META_HEADER_SCAN)
+                .match(metaRegex);
               if (match && match[0]) {
                 contentText = contentText.substring(match[0].length).trim();
                 const created = match[1];
@@ -401,7 +425,9 @@ export function renderTranscript(steps, container) {
 
           const metaRegex =
             /^(?:Created At:\s*(.*?)\n)?(?:Completed At:\s*(.*?)\n)?(?:Encountered error in step execution:\s*(.*?\n))?/;
-          const match = contentText.match(metaRegex);
+          const match = contentText
+            .slice(0, MAX_META_HEADER_SCAN)
+            .match(metaRegex);
 
           if (match && match[0]) {
             contentText = contentText.substring(match[0].length).trim();
@@ -411,7 +437,7 @@ export function renderTranscript(steps, container) {
 
             let statusMsg = "";
             const statusRegex =
-              /^\s*(The command (completed successfully\.|failed with exit code: \d+))/m;
+              /^[ \t]*(The command (completed successfully\.|failed with exit code: \d+))/m;
             const statusMatch = contentText.match(statusRegex);
             if (statusMatch) {
               statusMsg = statusMatch[1];
