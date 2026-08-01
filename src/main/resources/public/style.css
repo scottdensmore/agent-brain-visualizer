@@ -551,6 +551,15 @@ body {
 .json-boolean { color: #c084fc; }  /* Purple */
 .json-null { color: #94a3b8; }     /* Gray */
 
+/* Shown instead of the rich formatting when a step body is too large to scan (see timeline.js). */
+.oversized-step-note {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    padding-left: 8px;
+    border-left: 2px solid rgba(148, 163, 184, 0.3);
+}
+
 /* Markdown Body Styles */
 .markdown-body {
     line-height: 1.6;

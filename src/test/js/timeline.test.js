@@ -102,6 +102,54 @@ describe("renderTranscript", () => {
     expect(contextBlock.textContent).toContain("secret.txt");
   });
 
+  // Transcript text is whatever the agent read, and the content scanners are quadratic on input
+  // that opens a construct and never closes it. Without a bound, one such step pins the main
+  // thread for minutes — and since the newest session is auto-selected, on every page load.
+  it("renders a pathological step body within a time bound instead of scanning it", () => {
+    // Unclosed `@[` mention openings, which the mention scanner rescans to end-of-string from once
+    // per opening. ~64 KB costs about 4s uncapped and grows with the square of the content. This
+    // payload renders as plain text, so what the bound below measures is the scan, not the DOM
+    // building. The same cap bounds the tag, metadata and citation scanners.
+    const hostile = "@[".repeat(32_000); // ~64 KB
+    const steps = [
+      {
+        type: "USER_INPUT",
+        content: `<ADDITIONAL_METADATA>\n${hostile}\n</ADDITIONAL_METADATA>`,
+        created_at: "2026-06-19T10:00:00Z",
+      },
+    ];
+
+    const started = performance.now();
+    renderTranscript(steps, container);
+    expandCard();
+    const elapsed = performance.now() - started;
+
+    expect(elapsed).toBeLessThan(2000);
+    // The content is still shown in full — only the enrichment is skipped, and it says so.
+    expect(container.querySelector(".oversized-step-note")).not.toBeNull();
+    expect(container.querySelector(".markdown-body").textContent).toContain("@[");
+  });
+
+  it("still enriches a step body that sits under the scan limit", () => {
+    const steps = [
+      {
+        type: "USER_INPUT",
+        source: "USER_EXPLICIT",
+        content:
+          "<USER_REQUEST>\nPlease do X\n</USER_REQUEST>\n" +
+          "<ADDITIONAL_METADATA>\n@[notes.txt] is a [File]:\n/tmp/notes.txt\n</ADDITIONAL_METADATA>",
+        created_at: "2026-06-19T10:00:00Z",
+      },
+    ];
+
+    renderTranscript(steps, container);
+    expandCard();
+
+    expect(container.querySelector(".oversized-step-note")).toBeNull();
+    expect(container.querySelector(".user-request-block")).not.toBeNull();
+    expect(container.innerHTML).toContain("file:///tmp/notes.txt");
+  });
+
   it("appends a bottom timeline marker and fires the transcriptLoaded event", () => {
     let fired = false;
     const handler = () => {
