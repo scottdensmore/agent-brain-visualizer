@@ -198,8 +198,10 @@ public class EvalService {
         try {
             return clamp(
                 judgeService.judge(
-                    buildDigest(j.steps()),
-                    cap(toJson(j.analysis()), MAX_ANALYSIS_CHARS),
+                    // Both the digest and the analysis derive from a transcript pushed by whoever
+                    // could reach the ingest API: fence them as data the judge must rate, not obey.
+                    UntrustedText.fencedTranscript(buildDigest(j.steps())),
+                    UntrustedText.fencedAnalysis(cap(toJson(j.analysis()), MAX_ANALYSIS_CHARS)),
                     lens
                 )
             );

@@ -125,7 +125,12 @@ public class OptimizeService {
             return null;
         }
         try {
-            AnalysisResponse response = analyzer.analyzeWithInstruction(instruction, transcript);
+            // The transcript was pushed by whoever could reach the ingest API: fence it as untrusted
+            // data the model must describe rather than obey.
+            AnalysisResponse response = analyzer.analyzeWithInstruction(
+                instruction,
+                UntrustedText.fencedTranscript(transcript)
+            );
             JsonNode analysis = MAPPER.valueToTree(response);
             String id = session.id() == null ? "unknown" : session.id();
             return EvalScorer.score(id, session.steps(), analysis);
