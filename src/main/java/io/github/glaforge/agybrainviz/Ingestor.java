@@ -100,7 +100,11 @@ public class Ingestor {
         }
         // Only accept summaries for sources the server knows, matching the trajectory push.
         if (normalizerFor(pushed.source()).isEmpty()) {
-            LOG.warn("Rejecting summary for {}: unknown source '{}'", pushed.id(), pushed.source());
+            LOG.warn(
+                "Rejecting summary for {}: unknown source '{}'",
+                LogSafe.escape(pushed.id()),
+                LogSafe.escape(pushed.source())
+            );
             return Outcome.FAILED;
         }
         // Reject a non-JSON body up front (it can't go in the jsonb column) as this one item's
@@ -108,7 +112,10 @@ public class Ingestor {
         // store outage propagating out of the batch — a 503, exactly as a pushed trajectory behaves —
         // instead of being masked as a per-item failure inside a 200 response.
         if (!isValidJson(pushed.summary())) {
-            LOG.warn("Rejecting summary for {}: body is not valid JSON", pushed.id());
+            LOG.warn(
+                "Rejecting summary for {}: body is not valid JSON",
+                LogSafe.escape(pushed.id())
+            );
             return Outcome.FAILED;
         }
         boolean written = summaries.upsert(pushed.source(), pushed.id(), pushed.summary(), null);
@@ -137,7 +144,11 @@ public class Ingestor {
         }
         Optional<SourceNormalizer> normalizer = normalizerFor(pushed.source());
         if (normalizer.isEmpty()) {
-            LOG.warn("Rejecting trajectory {}: unknown source '{}'", pushed.id(), pushed.source());
+            LOG.warn(
+                "Rejecting trajectory {}: unknown source '{}'",
+                LogSafe.escape(pushed.id()),
+                LogSafe.escape(pushed.source())
+            );
             return Outcome.FAILED;
         }
 
@@ -170,8 +181,9 @@ public class Ingestor {
             } catch (RuntimeException e) {
                 LOG.warn(
                     "Stored trajectory {} but could not store its pushed summary: {}",
-                    pushed.id(),
-                    e.getMessage()
+                    LogSafe.escape(pushed.id()),
+                    // The store's message quotes the pushed id back, so it carries the same taint.
+                    LogSafe.escape(e.getMessage())
                 );
             }
         }
