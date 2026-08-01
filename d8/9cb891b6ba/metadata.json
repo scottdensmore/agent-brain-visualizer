@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "d89cb891b6ba",
+  "strategy": "manual-commit",
+  "branch": "security-patches-round-2",
+  "checkpoints_count": 16,
+  "files_touched": [
+    "docker-compose.yml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d8/9cb891b6ba/0/metadata.json",
+      "transcript": "/d8/9cb891b6ba/0/full.jsonl",
+      "compact_transcript": "/d8/9cb891b6ba/0/transcript.jsonl",
+      "content_hash": "/d8/9cb891b6ba/0/content_hash.txt",
+      "prompt": "/d8/9cb891b6ba/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2175,
+    "cache_creation_tokens": 2168792,
+    "cache_read_tokens": 57943810,
+    "output_tokens": 240910,
+    "api_call_count": 309
+  }
+}
