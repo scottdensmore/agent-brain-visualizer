@@ -17,6 +17,7 @@ package io.github.glaforge.agybrainviz;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Locale;
 
 /**
  * The Antigravity locations the app still needs after sessions moved to the store: the default flavor
@@ -37,5 +38,44 @@ final class AntigravityPaths {
      */
     static Path geminiRoot() {
         return Paths.get(System.getProperty("user.home"), ".gemini");
+    }
+
+    /**
+     * Whether a path inside the {@code ~/.gemini} sandbox is off limits to the file preview.
+     *
+     * <p>Living under {@code ~/.gemini} is not the same as being safe to serve. The Gemini CLI keeps
+     * its own credentials in that directory — {@code oauth_creds.json}, {@code google_accounts.json},
+     * {@code settings.json}, {@code mcp-oauth-tokens.json}, {@code .env} — while the transcripts the
+     * preview exists for live one level down, under {@code <source>/brain/}. So the rule is about
+     * shape rather than a list of names that a new credential file would immediately outgrow:
+     *
+     * <ul>
+     *   <li>anything whose name starts with a dot, at any depth — {@code .env}, {@code
+     *       .credentials/token.json};
+     *   <li>any {@code .json} file sitting directly in the sandbox root, which is where the CLI's own
+     *       state lives. Session JSON under {@code <source>/brain/} is unaffected.
+     * </ul>
+     *
+     * <p>This is checked independently of anything a transcript claims, and nothing can grant an
+     * exception to it. That matters because the ingest API is the way transcripts get here: an
+     * earlier attempt at this fix served a file whenever a session's transcript linked it, and was
+     * defeated by pushing a session that linked the credential file.
+     */
+    static boolean isPreviewDenied(Path sandbox, Path candidate) {
+        Path relative;
+        try {
+            relative = sandbox.normalize().relativize(candidate.normalize());
+        } catch (IllegalArgumentException e) {
+            return true; // not inside the sandbox at all; the caller refuses it anyway
+        }
+        for (Path part : relative) {
+            if (part.toString().startsWith(".")) {
+                return true;
+            }
+        }
+        return (
+            relative.getNameCount() == 1 &&
+            relative.toString().toLowerCase(Locale.ROOT).endsWith(".json")
+        );
     }
 }

@@ -16,6 +16,7 @@
 package io.github.glaforge.agybrainviz;
 
 import io.micronaut.http.HttpResponse;
+import io.micronaut.http.HttpStatus;
 import io.micronaut.http.annotation.Controller;
 import io.micronaut.http.annotation.Get;
 import io.micronaut.http.annotation.PathVariable;
@@ -95,14 +96,25 @@ public class BrainController {
             if (!filePath.startsWith(geminiDir)) {
                 return HttpResponse.unauthorized();
             }
+            // Being inside the sandbox is not enough: the Gemini CLI keeps its own credentials in
+            // this directory. Checked before the file is touched, so a refusal is not an existence
+            // oracle for the rest of ~/.gemini.
+            if (AntigravityPaths.isPreviewDenied(geminiDir, filePath)) {
+                return deniedForPreview();
+            }
             if (!Files.exists(filePath) || Files.isDirectory(filePath)) {
                 return HttpResponse.notFound("File not available on this machine.");
             }
             // A symlink under ~/.gemini can point anywhere on disk; re-check the sandbox against the
-            // fully resolved path so a planted link can't read files outside it.
+            // fully resolved path so a planted link can't read files outside it — or, via the deny
+            // check, reach a credential file that the requested spelling hid.
             Path realFile = filePath.toRealPath();
-            if (!realFile.startsWith(geminiDir.toRealPath())) {
+            Path realGeminiDir = geminiDir.toRealPath();
+            if (!realFile.startsWith(realGeminiDir)) {
                 return HttpResponse.unauthorized();
+            }
+            if (AntigravityPaths.isPreviewDenied(realGeminiDir, realFile)) {
+                return deniedForPreview();
             }
             return HttpResponse.ok(Files.readString(realFile));
         } catch (NoSuchFileException e) {
@@ -110,5 +122,16 @@ public class BrainController {
         } catch (IOException e) {
             return HttpResponse.serverError("Error reading file: " + e.getMessage());
         }
+    }
+
+    /**
+     * Forbidden rather than unauthorized: no credential makes these files previewable, and the
+     * frontend's {@code apiFetch} prompts for an API token on a 401, which would send the user
+     * hunting for a token that cannot help.
+     */
+    private static HttpResponse<String> deniedForPreview() {
+        return HttpResponse
+            .<String>status(HttpStatus.FORBIDDEN)
+            .body("This file is not available for preview.");
     }
 }
