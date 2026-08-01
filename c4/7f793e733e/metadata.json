@@ -1,0 +1,24 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "c47f793e733e",
+  "strategy": "manual-commit",
+  "branch": "security-patches-round-2",
+  "checkpoints_count": 16,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/c4/7f793e733e/0/metadata.json",
+      "transcript": "/c4/7f793e733e/0/full.jsonl",
+      "compact_transcript": "/c4/7f793e733e/0/transcript.jsonl",
+      "content_hash": "/c4/7f793e733e/0/content_hash.txt",
+      "prompt": "/c4/7f793e733e/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2218,
+    "cache_creation_tokens": 2195502,
+    "cache_read_tokens": 66458430,
+    "output_tokens": 252266,
+    "api_call_count": 332
+  }
+}
