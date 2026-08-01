@@ -63,6 +63,9 @@ final class UntrustedText {
     /** Fence tag for an AI analysis of a transcript, which inherits the transcript's taint. */
     static final String ANALYSIS_TAG = "untrusted_analysis";
 
+    /** Fence tag for the miner's evidence digest, rendered from ingested sessions. */
+    static final String EVIDENCE_TAG = "untrusted_evidence";
+
     /** What a fence lookalike found inside untrusted text is replaced with. */
     static final String MARKER_PLACEHOLDER = "[marker removed]";
 

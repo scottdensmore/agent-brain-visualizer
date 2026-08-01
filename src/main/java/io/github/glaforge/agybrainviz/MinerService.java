@@ -18,7 +18,6 @@ package io.github.glaforge.agybrainviz;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * The "skill / AGENTS.md miner": gathers a source's sessions, mines structural patterns with the
@@ -124,56 +123,26 @@ public class MinerService {
         );
     }
 
-    /**
-     * The tag {@link MinerAdvisorService} fences the evidence with to mark it as untrusted data.
-     * Ingested text that spells it is defanged by {@link #inert} so it cannot close the fence.
-     */
-    static final String UNTRUSTED_TAG = "untrusted_evidence";
-
-    private static final Pattern UNTRUSTED_TAG_PATTERN = Pattern.compile(
-        UNTRUSTED_TAG,
-        Pattern.CASE_INSENSITIVE
-    );
-
     /** Hard cap on how much of one ingested value is rendered into the prompt. */
     private static final int MAX_VALUE_CHARS = 200;
 
     /**
-     * Renders one mined value as inert data. Tool names and analysis text come from whoever pushed
-     * the trajectory, and the advisor's proposals are exported as AGENTS.md rules and skills, so an
-     * ingested string must not be able to shape the prompt: newlines and other control characters —
-     * which would forge extra evidence lines or a fake section header — collapse to spaces, the
-     * fence tag is neutralized so the untrusted block cannot be closed early, and the value is
-     * length-capped. The value itself is still passed through, just as data.
+     * Renders one mined value as a single inert evidence item. Tool names and analysis text come
+     * from whoever pushed the trajectory, and the advisor's proposals are exported as AGENTS.md
+     * rules and skills, so an ingested string must not be able to shape the digest around it: line
+     * breaks — which would forge extra evidence lines or a fake section header — collapse to spaces,
+     * and the value is length-capped. The value itself is still passed through, just as data. Fence
+     * lookalikes are handled once for the whole digest by {@link UntrustedText#fenced}.
      */
-    static String inert(String text) {
-        if (text == null) return "";
-        StringBuilder flat = new StringBuilder(text.length());
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            flat.append(breaksLine(c) ? ' ' : c);
-        }
-        String cleaned = UNTRUSTED_TAG_PATTERN
-            .matcher(flat)
-            .replaceAll("[marker removed]")
-            .replaceAll("\\s{2,}", " ")
-            .strip();
-        return cleaned.length() > MAX_VALUE_CHARS
-            ? cleaned.substring(0, MAX_VALUE_CHARS) + "..."
-            : cleaned;
+    private static String item(String text) {
+        return text == null ? "" : UntrustedText.boundedLine(text, MAX_VALUE_CHARS);
     }
 
-    /** True for characters that could start a new line inside the rendered evidence block. */
-    private static boolean breaksLine(char c) {
-        int type = Character.getType(c);
-        return (
-            Character.isISOControl(c) ||
-            type == Character.LINE_SEPARATOR ||
-            type == Character.PARAGRAPH_SEPARATOR
-        );
-    }
-
-    /** Renders the mined evidence into a compact prompt for the advisor. */
+    /**
+     * Renders the mined evidence into a compact prompt for the advisor, fenced as untrusted data.
+     * The fence tag carries a per-call random nonce, so no ingested value can spell the closing
+     * marker and promote itself to the instruction side of the prompt.
+     */
     private String buildEvidenceDigest(PatternMiner.Patterns p) {
         StringBuilder sb = new StringBuilder();
 
@@ -186,7 +155,7 @@ public class MinerService {
             for (NameCount s : p.toolSequences()) {
                 sb
                     .append("- ")
-                    .append(inert(s.name()))
+                    .append(item(s.name()))
                     .append(" (")
                     .append(s.count())
                     .append(" sessions)\n");
@@ -198,10 +167,10 @@ public class MinerService {
             sb.append("- (none)\n");
         } else {
             for (FixPair f : p.failureFixes()) {
-                String fix = inert(f.fix());
+                String fix = item(f.fix());
                 sb
                     .append("- Error: ")
-                    .append(inert(f.error()))
+                    .append(item(f.error()))
                     .append(" | Fix: ")
                     .append(fix.isBlank() ? "(not recorded)" : fix)
                     .append(" (")
@@ -217,14 +186,14 @@ public class MinerService {
             for (NameCount r : p.recommendations()) {
                 sb
                     .append("- ")
-                    .append(inert(r.name()))
+                    .append(item(r.name()))
                     .append(" (")
                     .append(r.count())
                     .append(" sessions)\n");
             }
         }
 
-        return sb.toString();
+        return UntrustedText.fenced(UntrustedText.EVIDENCE_TAG, sb.toString());
     }
 
     private static <T> List<T> orEmpty(List<T> list) {
