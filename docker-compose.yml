@@ -27,7 +27,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-agentviz}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentviz}
     ports:
-      - "5432:5432"
+      # Loopback only, so the well-known dev credentials above are reachable just from this machine
+      # (`./gradlew run`, `npm run e2e`, psql on the host). A bare "5432:5432" would bind 0.0.0.0, and
+      # Docker's publishing rules sit ahead of host firewalls like ufw — anyone on the LAN could then
+      # log into the dev database with the credentials published in this repository.
+      - "127.0.0.1:5432:5432"
     volumes:
       # Named volume: the data survives `docker compose down`, restarts, and app-image rebuilds.
       # It is removed only by `docker compose down -v`.
