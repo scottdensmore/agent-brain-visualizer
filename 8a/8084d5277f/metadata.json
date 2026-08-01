@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "8a8084d5277f",
+  "strategy": "manual-commit",
+  "branch": "fix-gemini-file-preview",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "src/main/java/io/github/glaforge/agybrainviz/BrainController.java",
+    "src/test/java/io/github/glaforge/agybrainviz/BrainControllerTest.java"
+  ],
+  "sessions": [
+    {
+      "metadata": "/8a/8084d5277f/0/metadata.json",
+      "transcript": "/8a/8084d5277f/0/full.jsonl",
+      "compact_transcript": "/8a/8084d5277f/0/transcript.jsonl",
+      "content_hash": "/8a/8084d5277f/0/content_hash.txt",
+      "prompt": "/8a/8084d5277f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2407,
+    "cache_creation_tokens": 2276806,
+    "cache_read_tokens": 109603418,
+    "output_tokens": 305852,
+    "api_call_count": 433
+  }
+}
