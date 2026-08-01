@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "d421c51cf878",
+  "strategy": "manual-commit",
+  "branch": "fix-scanner-blowup-round-2",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "src/main/resources/public/modules/timeline.js",
+    "src/test/js/timeline.test.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d4/21c51cf878/0/metadata.json",
+      "transcript": "/d4/21c51cf878/0/full.jsonl",
+      "compact_transcript": "/d4/21c51cf878/0/transcript.jsonl",
+      "content_hash": "/d4/21c51cf878/0/content_hash.txt",
+      "prompt": "/d4/21c51cf878/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2548,
+    "cache_creation_tokens": 4369773,
+    "cache_read_tokens": 146762968,
+    "output_tokens": 361248,
+    "api_call_count": 509
+  }
+}
