@@ -21,6 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -279,6 +282,41 @@ class IngestorTest extends PostgresTest {
         );
         // One bad entry must not lose the rest of a batch.
         assertEquals(new IngestResult(1, 0, 3), result);
+    }
+
+    @Test
+    void aPushedIdCannotForgeALogRecordOfItsOwn() {
+        // id and source come straight from the body of an (optionally unauthenticated) ingest POST,
+        // and the console appender ends a record at a newline, so a raw line break in either would
+        // let a client write log lines of its own choosing around the one the server meant to write.
+        String forged = "s1\n00:00:00.000 [main] WARN  i.g.g.a.Ingestor - nothing to see here";
+        String logged = captureConsole(() -> ingestor.ingest(List.of(push("borg", forged, ""))));
+
+        assertTrue(logged.contains("Rejecting trajectory"), "the rejection must still be logged");
+        List<String> forgedLines = logged
+            .lines()
+            .filter(line -> line.contains("nothing to see here"))
+            .toList();
+        assertEquals(1, forgedLines.size(), "the pushed id must not span log lines:\n" + logged);
+        assertTrue(
+            forgedLines.get(0).contains("Rejecting trajectory"),
+            "the pushed id forged a log record of its own:\n" + logged
+        );
+        assertTrue(logged.contains("s1\\n00:00:00.000"), "the line break should read as an escape");
+    }
+
+    /** Runs {@code body} with the console appender's output captured. */
+    private static String captureConsole(Runnable body) {
+        PrintStream original = System.out;
+        ByteArrayOutputStream captured = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(captured, true, StandardCharsets.UTF_8));
+        try {
+            body.run();
+        } finally {
+            System.out.flush();
+            System.setOut(original);
+        }
+        return captured.toString(StandardCharsets.UTF_8);
     }
 
     @Test

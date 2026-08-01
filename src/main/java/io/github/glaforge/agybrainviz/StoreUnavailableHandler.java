@@ -37,7 +37,13 @@ public class StoreUnavailableHandler
 
     @Override
     public HttpResponse<?> handle(HttpRequest request, StoreUnavailableException exception) {
-        LOG.warn("Store unavailable serving {}: {}", request.getPath(), exception.getMessage());
+        // Both of these carry request-supplied text — the path, and the repository message, which
+        // quotes the id (an ingest body's, on the push path) it could not store.
+        LOG.warn(
+            "Store unavailable serving {}: {}",
+            LogSafe.escape(request.getPath()),
+            LogSafe.escape(exception.getMessage())
+        );
         return HttpResponse
             .status(HttpStatus.SERVICE_UNAVAILABLE)
             .body(

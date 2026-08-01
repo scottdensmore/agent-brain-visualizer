@@ -36,6 +36,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.ToIntFunction;
+import java.util.function.UnaryOperator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +52,13 @@ public class AnalysisOrchestrator {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private static final int MAX_TOKENS_PER_CHUNK = 100_000;
+
+    /** Hard caps on what one model reply may write into the cached, publicly served analysis. */
+    static final int MAX_TITLE_CHARS = 120;
+    static final int MAX_SUMMARY_CHARS = 8_000;
+    static final int MAX_ITEM_CHARS = 600;
+    static final int MAX_ITEMS = 40;
+    static final int MAX_RECOMMENDATIONS = 30;
 
     public record ProgressState(int progress, String phase) {}
 
@@ -208,6 +216,10 @@ public class AnalysisOrchestrator {
 
         progressMap.put(key, new ProgressState(100, "Done"));
 
+        // The model just read an attacker-controllable transcript, so bound what its reply can write
+        // into the cache that every viewer (and later the miner) reads.
+        responseObj = normalize(responseObj);
+
         String jsonResponse = MAPPER.writeValueAsString(responseObj);
 
         // Don't persist a degraded local-merge fallback: the consolidation failure was
@@ -249,7 +261,11 @@ public class AnalysisOrchestrator {
                     }
 
                     try {
-                        String chunk = String.join("\n", chunkLines);
+                        // The transcript was pushed by whoever could reach the ingest API: fence it
+                        // as untrusted data the model must describe rather than obey.
+                        String chunk = UntrustedText.fencedTranscript(
+                            String.join("\n", chunkLines)
+                        );
                         AnalysisResponse seqResponse = null;
                         try {
                             seqResponse = analyzerService.analyze(chunk);
@@ -330,7 +346,8 @@ public class AnalysisOrchestrator {
         }
         // A consolidation failure below propagates to the caller (which falls back to a local merge).
         if (withinBudget || responses.size() <= 1) {
-            return analyzerService.consolidateAnalysis(json);
+            // These analyses were produced from ingested transcripts, so they carry the same taint.
+            return analyzerService.consolidateAnalysis(UntrustedText.fencedAnalysis(json));
         }
 
         int mid = responses.size() / 2;
@@ -346,7 +363,9 @@ public class AnalysisOrchestrator {
             mapper,
             maxTokens
         );
-        return analyzerService.consolidateAnalysis(mapper.writeValueAsString(List.of(r1, r2)));
+        return analyzerService.consolidateAnalysis(
+            UntrustedText.fencedAnalysis(mapper.writeValueAsString(List.of(r1, r2)))
+        );
     }
 
     /**
@@ -408,5 +427,58 @@ public class AnalysisOrchestrator {
 
     private static <T> List<T> cap(List<T> list, int max) {
         return list.size() > max ? new ArrayList<>(list.subList(0, max)) : list;
+    }
+
+    /**
+     * Bounds and cleans a model reply before it is serialized, cached, and served. Only the shape is
+     * normalized — control characters, unbounded lengths, and runaway list sizes — so the wording the
+     * model chose is preserved. The list caps match the ones {@link #localMerge} already applies.
+     */
+    private static AnalysisResponse normalize(AnalysisResponse response) {
+        if (response == null) return null;
+        return new AnalysisResponse(
+            UntrustedText.boundedLine(response.shortTitle(), MAX_TITLE_CHARS),
+            normalizeEach(response.flow(), MAX_ITEMS, AnalysisOrchestrator::boundedItem),
+            normalizeEach(
+                response.agentActions(),
+                MAX_ITEMS,
+                action ->
+                    action == null
+                        ? null
+                        : new AgentAction(
+                            boundedItem(action.action()),
+                            boundedItem(action.description())
+                        )
+            ),
+            normalizeEach(
+                response.issues(),
+                MAX_ITEMS,
+                issue ->
+                    issue == null
+                        ? null
+                        : new Issue(boundedItem(issue.error()), boundedItem(issue.circumvention()))
+            ),
+            normalizeEach(
+                response.recommendations(),
+                MAX_RECOMMENDATIONS,
+                AnalysisOrchestrator::boundedItem
+            ),
+            UntrustedText.boundedText(response.summary(), MAX_SUMMARY_CHARS)
+        );
+    }
+
+    private static String boundedItem(String value) {
+        return UntrustedText.boundedLine(value, MAX_ITEM_CHARS);
+    }
+
+    /** Applies {@code normalizer} to at most {@code max} items; a null list stays null. */
+    private static <T> List<T> normalizeEach(List<T> list, int max, UnaryOperator<T> normalizer) {
+        if (list == null) return null;
+        List<T> normalized = new ArrayList<>(Math.min(list.size(), max));
+        for (T item : list) {
+            if (normalized.size() >= max) break;
+            normalized.add(normalizer.apply(item));
+        }
+        return normalized;
     }
 }

@@ -123,7 +123,26 @@ public class MinerService {
         );
     }
 
-    /** Renders the mined evidence into a compact prompt for the advisor. */
+    /** Hard cap on how much of one ingested value is rendered into the prompt. */
+    private static final int MAX_VALUE_CHARS = 200;
+
+    /**
+     * Renders one mined value as a single inert evidence item. Tool names and analysis text come
+     * from whoever pushed the trajectory, and the advisor's proposals are exported as AGENTS.md
+     * rules and skills, so an ingested string must not be able to shape the digest around it: line
+     * breaks — which would forge extra evidence lines or a fake section header — collapse to spaces,
+     * and the value is length-capped. The value itself is still passed through, just as data. Fence
+     * lookalikes are handled once for the whole digest by {@link UntrustedText#fenced}.
+     */
+    private static String item(String text) {
+        return text == null ? "" : UntrustedText.boundedLine(text, MAX_VALUE_CHARS);
+    }
+
+    /**
+     * Renders the mined evidence into a compact prompt for the advisor, fenced as untrusted data.
+     * The fence tag carries a per-call random nonce, so no ingested value can spell the closing
+     * marker and promote itself to the instruction side of the prompt.
+     */
     private String buildEvidenceDigest(PatternMiner.Patterns p) {
         StringBuilder sb = new StringBuilder();
 
@@ -136,7 +155,7 @@ public class MinerService {
             for (NameCount s : p.toolSequences()) {
                 sb
                     .append("- ")
-                    .append(s.name())
+                    .append(item(s.name()))
                     .append(" (")
                     .append(s.count())
                     .append(" sessions)\n");
@@ -148,11 +167,12 @@ public class MinerService {
             sb.append("- (none)\n");
         } else {
             for (FixPair f : p.failureFixes()) {
+                String fix = item(f.fix());
                 sb
                     .append("- Error: ")
-                    .append(f.error())
+                    .append(item(f.error()))
                     .append(" | Fix: ")
-                    .append(f.fix().isBlank() ? "(not recorded)" : f.fix())
+                    .append(fix.isBlank() ? "(not recorded)" : fix)
                     .append(" (")
                     .append(f.count())
                     .append(" sessions)\n");
@@ -166,14 +186,14 @@ public class MinerService {
             for (NameCount r : p.recommendations()) {
                 sb
                     .append("- ")
-                    .append(r.name())
+                    .append(item(r.name()))
                     .append(" (")
                     .append(r.count())
                     .append(" sessions)\n");
             }
         }
 
-        return sb.toString();
+        return UntrustedText.fenced(UntrustedText.EVIDENCE_TAG, sb.toString());
     }
 
     private static <T> List<T> orEmpty(List<T> list) {
