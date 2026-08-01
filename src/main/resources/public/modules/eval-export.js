@@ -27,10 +27,21 @@ const COLUMNS = [
   "avgClarity",
 ];
 
+// A cell starting with one of these is evaluated as a formula when the CSV is opened
+// in Excel/LibreOffice/Sheets (leading tab/CR are stripped first, exposing the next char).
+const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
+// A plain (optionally signed) number can only ever evaluate to itself, so it is left as-is
+// and stays a real number in the spreadsheet — e.g. a score of -1.5 is not mangled.
+const PLAIN_NUMBER = /^[+-]?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?$/;
+
 // Quote a cell only when it contains a comma, quote, or newline; double embedded quotes (RFC 4180).
+// Text that would otherwise start a formula is prefixed with an apostrophe (the marker spreadsheets
+// read as "this cell is text") and always quoted, so a stored value cannot execute or split rows.
 function csvCell(value) {
-  const s = value === null || value === undefined ? "" : String(value);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const raw = value === null || value === undefined ? "" : String(value);
+  const neutralize = FORMULA_TRIGGER.test(raw) && !PLAIN_NUMBER.test(raw);
+  const s = neutralize ? `'${raw}` : raw;
+  return neutralize || /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 // The distinct check names across all runs, in first-seen order, for stable per-check columns.
@@ -52,7 +63,8 @@ function checkNamesOf(runs) {
 export function historyCsv(history) {
   const runs = Array.isArray(history) ? history : [];
   const checks = checkNamesOf(runs);
-  const headers = [...COLUMNS, ...checks.map((n) => `check:${n}`)];
+  // Check names come from stored runs, so the header row goes through csvCell too.
+  const headers = [...COLUMNS, ...checks.map((n) => `check:${n}`)].map(csvCell);
   const rows = runs.map((run) => {
     const byName = {};
     for (const c of run.checkPassRates || []) byName[c.name] = c.count;
