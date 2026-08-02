@@ -55,6 +55,55 @@ agent-ingest --server https://viz.example.com --source claude-code
 agent-ingest --dry-run
 ```
 
+## Pointing it at a shared visualizer
+
+The common setup is one always-on machine running the visualizer — a Mac mini, a NAS, a
+spare box — with every laptop and desktop pushing its transcripts there. Two things have
+to line up: the address, and the ingest token the server requires.
+
+Ask the server's owner for its address and the value of `INGEST_TOKEN` (it is a different
+secret from `API_TOKEN`, which the web UI asks you for). Then, on each machine that
+should push:
+
+```bash
+# Put both in your shell profile so every run picks them up.
+export AGENT_INGEST_SERVER=http://mini.local:8080
+export AGENT_INGEST_TOKEN=<the server's INGEST_TOKEN>
+
+agent-ingest
+```
+
+Or per-invocation, with the token still coming from the environment so it never lands in
+shell history or the process list:
+
+```bash
+AGENT_INGEST_TOKEN=... agent-ingest --server http://mini.local:8080
+```
+
+Check it before trusting a schedule:
+
+```bash
+agent-ingest --server http://mini.local:8080 --dry-run
+```
+
+`--dry-run` still contacts the server for the manifest, so it proves the address, the
+token, and the network path all work — without uploading anything. A wrong or missing
+token fails with a 401 rather than silently pushing nothing.
+
+**The address.** Use whatever the server answers to on your network: `mini.local` if
+Bonjour/mDNS resolves it, otherwise its LAN IP (`http://192.168.1.50:8080`). Give the
+server a static or reserved DHCP address if you are putting this in a schedule — a
+machine that changes IP will fail every run until the config is updated. `https://` works
+the same way if the server is behind a TLS-terminating proxy.
+
+**After upgrading a server** to a version that stores attached files, run once with
+`--no-cache` from each machine. Sessions already in the store are skipped as unchanged,
+so without it their attached files never get uploaded and their previews stay broken:
+
+```bash
+agent-ingest --no-cache
+```
+
 Running it again uploads nothing: each session is keyed by a stable `(source, id)`
 and skipped when the server already has identical content, so it is safe to run on a
 schedule (`cron`, a `launchd` timer, …).

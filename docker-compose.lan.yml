@@ -1,0 +1,50 @@
+# Overlay for running the stack on an always-on machine that serves your own network — a Mac mini,
+# a NAS, a spare box — so every computer on the LAN can open the UI and push trajectories to it.
+#
+#   APP_VERSION=$(git describe --tags --always) \
+#     docker compose -f docker-compose.yml -f docker-compose.lan.yml --profile full up -d --build
+#
+# The base file publishes the app on 127.0.0.1, which is right for a laptop and wrong for a server.
+# This widens that one mapping — and, because doing so is only safe behind a credential, it refuses
+# to start without one rather than letting the port open quietly.
+#
+# This is the LAN counterpart to docker-compose.prod.yml. Use that one instead if the server is
+# reachable from the internet: it keeps the app on loopback behind a TLS-terminating reverse proxy.
+# This file assumes a network you trust, with plain HTTP inside it.
+#
+# Requires Docker Compose v2.24+ (Jan 2024) for the `!reset` / `!override` merge tags.
+
+services:
+  postgres:
+    # The database has no business on the network: only the app talks to it, over the compose
+    # network, by service name. `!reset` replaces the base list — a plain `ports: []` would be
+    # *appended*, leaving 5432 published.
+    ports: !reset []
+
+  app:
+    # `!override` replaces the base mapping rather than appending to it, so 8080 is published once,
+    # on every interface. This is the whole point of the file: other machines can now reach it.
+    ports: !override
+      - "8080:8080"
+    environment:
+      # Publishing to the LAN without a token would serve every stored trajectory — and let anyone
+      # push their own — to any device on the network. `:?` makes Compose refuse to start until both
+      # are set, so the port can never open while the API is unauthenticated.
+      #
+      # Generate them once (`openssl rand -hex 32` each, different values) into a .env beside this
+      # file. API_TOKEN guards reads and the LLM-spending endpoints; the web UI prompts for it on
+      # first visit and remembers it. INGEST_TOKEN guards pushes and goes to every machine running
+      # agent-ingest — see cli/README.md.
+      API_TOKEN: ${API_TOKEN:?set API_TOKEN in .env — publishing to the LAN without it would serve every stored trajectory to the network}
+      INGEST_TOKEN: ${INGEST_TOKEN:?set INGEST_TOKEN in .env — publishing to the LAN without it would let any device push trajectories}
+      # Fail closed. If a token is ever emptied by accident the app refuses those endpoints instead
+      # of silently reverting to the open default.
+      API_REQUIRE_AUTH: "true"
+      INGEST_REQUIRE_AUTH: "true"
+      # Readable logs by default here: this is a machine someone runs `docker compose logs` on, not
+      # one feeding a log aggregator. Override with LOG_APPENDER=CONSOLE_JSON if you collect them.
+      LOG_APPENDER: ${LOG_APPENDER:-CONSOLE_TEXT}
+      # The database is unpublished above, so the dev default is not exposed to the network — but a
+      # long-lived server deserves its own password. Postgres reads this only when it first
+      # initializes the pgdata volume, so set it before the first `up` (see the note in the base file).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentviz}
