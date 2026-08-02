@@ -52,13 +52,21 @@ func New(baseURL, token string) *Client {
 
 // PushSession mirrors the server's IngestSession record; the JSON field names
 // must match it exactly or the server deserializes nulls and rejects the batch.
+// PushFile is one file the transcript referenced, carried with the session so the
+// viewer can preview it without the file being on the machine serving the UI.
+type PushFile struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
 type PushSession struct {
-	Source      string `json:"source"`
-	ID          string `json:"id"`
-	Title       string `json:"title,omitempty"`
-	SourceMtime int64  `json:"sourceMtime"`
-	Raw         string `json:"raw"`
-	Summary     string `json:"summary,omitempty"`
+	Source      string     `json:"source"`
+	ID          string     `json:"id"`
+	Title       string     `json:"title,omitempty"`
+	SourceMtime int64      `json:"sourceMtime"`
+	Raw         string     `json:"raw"`
+	Summary     string     `json:"summary,omitempty"`
+	Files       []PushFile `json:"files,omitempty"`
 }
 
 // PushSummary mirrors the server's IngestSummary record: a cached analysis pushed

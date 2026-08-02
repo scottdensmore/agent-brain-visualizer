@@ -24,6 +24,8 @@ Additionally, it leverages Google's Gemini LLMs to automatically generate compre
 *   **Session Loading**: Lists the ingested sessions for the selected source from the store, newest first.
 *   **Multiple Sources**: Antigravity (`antigravity-cli` / `antigravity-ide`), **OpenAI Codex**, and **Claude Code** sessions are all ingested into the same store and rendered in one timeline view. The `agent-ingest` CLI locates each tool's transcripts (`~/.gemini`, `~/.codex/sessions`, `~/.claude/projects`) and pushes them; the server normalizes each tool's format into the shared step schema and caches AI summaries alongside them.
     > **Note:** Inline file preview is available for Antigravity transcripts, which embed explicit file references. Codex and Claude Code sessions reference files through shell/tool calls rather than the structured `file://` links Antigravity emits, so clickable file previews are not generated for them.
+    >
+    > `agent-ingest` uploads the files a transcript attached along with the session, so the preview works from any machine — not only the one that ran the agent. Only files the transcript explicitly references are sent, each under 256 KiB and at most 25 per session, and anything that looks like credential material (`.env`, `*.pem`, `id_rsa`, `oauth_creds.json`, paths under `.ssh`/`.aws`/`.gnupg`, …) is skipped and reported on stderr. Pass `--no-upload-files` to send none.
 *   **Fleet Insights**: A **📊 Insights** button opens a cross-session dashboard for the selected source — session/outcome counts, busiest tools, the most common errors, average tool calls and duration, and a rolled-up backlog of the recommendations and issues surfaced by the per-session AI analyses. Every tally row is **drill-down**: click it to see (and open) the sessions behind it.
 *   **Skill / AGENTS.md Miner**: A **🛠️ Mine** button turns the corpus into reusable assets — it mines recurring tool-call workflows and failure→fix patterns across sessions and (when AI is configured) proposes concrete **skills**, **AGENTS.md rules**, and tooling gaps, each downloadable as a drop-in `SKILL.md` / `AGENTS.md` file.
 *   **Analysis Eval**: A **🧪 Eval** button scores the quality of the AI analyses with six deterministic checks (schema completeness, actionability, conciseness, non-degeneracy, error coverage), plus an opt-in **LLM-as-judge panel** (strict/balanced/pragmatic lenses, averaged, with the panel's spread shown). Runs are **savable** into a history you can delete, **A/B compare**, chart (score + per-check sparklines), and export to **CSV**.
@@ -158,8 +160,9 @@ agent-ingest --server http://localhost:8080
 ```
 
 > [!NOTE]
-> One feature can't work from inside the container: the inline **file preview** (`/api/brain/file`)
-> serves real files under the host's `~/.gemini`, which the container can't see. Everything served
+> The inline **file preview** works in the container for sessions pushed by a current `agent-ingest`,
+> which uploads the referenced files with the session. For older sessions it falls back to reading
+> the host's `~/.gemini`, which the container can't see. Everything served
 > from the store — sessions, transcripts, analyses, insights — works normally.
 
 For **database-only** development (running the app on the host with `./gradlew run` against a

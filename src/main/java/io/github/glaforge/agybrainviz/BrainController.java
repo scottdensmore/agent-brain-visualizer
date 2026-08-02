@@ -38,10 +38,12 @@ import java.util.Optional;
 public class BrainController {
 
     private final SessionRepository sessions;
+    private final SessionFileRepository sessionFiles;
 
     @Inject
-    public BrainController(SessionRepository sessions) {
+    public BrainController(SessionRepository sessions, SessionFileRepository sessionFiles) {
         this.sessions = sessions;
+        this.sessionFiles = sessionFiles;
     }
 
     /** Default page size when the client asks for none — enough to fill the sidebar in one load. */
@@ -89,7 +91,26 @@ public class BrainController {
      */
     @ExecuteOn(TaskExecutors.IO)
     @Get(value = "/file", produces = "text/plain")
-    public HttpResponse<String> getFileContent(@QueryValue String path) {
+    public HttpResponse<String> getFileContent(
+        @QueryValue String path,
+        @QueryValue Optional<String> id,
+        @QueryValue Optional<String> flavor
+    ) {
+        // Preferred path: the ingest client attached this file to the session, so it is in the store
+        // and works from any machine. The server opens nothing, and the path is only a lookup key —
+        // which is also why the sandbox and credential rules below do not apply to it: the client
+        // that had the file decided what to send, and it applies its own secret filtering.
+        if (id.isPresent()) {
+            String source = flavor.orElse(AntigravityPaths.DEFAULT_FLAVOR);
+            Optional<String> stored = sessionFiles.find(source, id.get(), path);
+            if (stored.isPresent()) {
+                return HttpResponse.ok(stored.get());
+            }
+        }
+
+        // Fallback for sessions ingested before attachments existed (or pushed with
+        // --no-upload-files): read the server's own disk, sandboxed as before. This only ever works
+        // when the machine serving the UI is the machine that ran the agent.
         try {
             Path filePath = Paths.get(path).normalize();
             Path geminiDir = AntigravityPaths.geminiRoot().normalize();

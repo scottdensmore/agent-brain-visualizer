@@ -167,6 +167,40 @@ function buildSessions(configPath) {
       }),
     },
     {
+      // The case the file preview used to fail: the attached file is NOT on this machine's disk
+      // (nothing ever writes /srv/elsewhere/Remote.java), so the server can only serve it from the
+      // copy the ingest client pushed with the session. Before attachments, this 404'd — which is
+      // what happened to every session viewed from a machine that didn't run the agent.
+      source: "antigravity-cli",
+      id: "sess-0003-attached",
+      title: "Attached file from another machine",
+      sourceMtime: Date.parse("2026-06-19T09:00:00Z"),
+      raw: jsonl([
+        {
+          type: "USER_INPUT",
+          source: "USER_EXPLICIT",
+          content:
+            "<USER_REQUEST>\nReview @[Remote.java] please\n</USER_REQUEST>\n" +
+            "<ADDITIONAL_METADATA>\n@[Remote.java] is a [File]:\n/srv/elsewhere/Remote.java\n</ADDITIONAL_METADATA>",
+          created_at: "2026-06-19T09:00:00Z",
+        },
+      ]),
+      files: [
+        {
+          path: "/srv/elsewhere/Remote.java",
+          content: "class Remote { /* pushed with the session, never on this disk */ }",
+        },
+      ],
+      summary: JSON.stringify({
+        shortTitle: "Attached file",
+        summary: "A session carrying a file from the machine that ran the agent.",
+        flow: [],
+        agentActions: [],
+        issues: [],
+        recommendations: [],
+      }),
+    },
+    {
       source: "codex",
       id: "rollout-2026-06-20T14-00-00-codexsession",
       sourceMtime: Date.parse("2026-06-20T14:00:00Z"),
