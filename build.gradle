@@ -51,7 +51,7 @@ dependencies {
     // Shared Postgres store: a pooled DataSource + the driver. The repositories use
     // plain JDBC, so the driver is only needed at runtime.
     implementation("io.micronaut.sql:micronaut-jdbc-hikari")
-    runtimeOnly("org.postgresql:postgresql:42.7.4")
+    runtimeOnly("org.postgresql:postgresql:42.7.13")
 
     // Testcontainers: H2's Postgres mode does not honour jsonb or `ON CONFLICT ... WHERE`,
     // so repository tests run against a real Postgres.
