@@ -18,6 +18,8 @@ package io.github.glaforge.agybrainviz;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The "skill / AGENTS.md miner": gathers a source's sessions, mines structural patterns with the
@@ -30,6 +32,8 @@ import java.util.List;
  */
 @Singleton
 public class MinerService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MinerService.class);
 
     private final SessionCollector collector;
     private final MinerAdvisorService advisor;
@@ -76,7 +80,12 @@ public class MinerService {
         try {
             proposal = advisor.propose(buildEvidenceDigest(p));
         } catch (Exception e) {
-            System.err.println("Miner advisor failed; returning evidence only: " + e.getMessage());
+            // The message can quote ingested text back, so escape it and use the logger rather than
+            // raw stderr, which no appender formats.
+            LOG.warn(
+                "Miner advisor failed; returning evidence only: {}",
+                LogSafe.escape(e.getMessage())
+            );
             return degraded(
                 flavor,
                 collected,

@@ -75,6 +75,15 @@ class AnalysisControllerTest implements TestPropertyProvider {
     );
     private static final AtomicInteger TOKEN_RESULT = new AtomicInteger(10);
     private static final List<String> ANALYZE_CALLS = new CopyOnWriteArrayList<>();
+    /** In-flight and high-water analyze calls, so the chunk fan-out's bound can be asserted. */
+    private static final AtomicInteger ANALYZE_INFLIGHT = new AtomicInteger(0);
+    private static final AtomicInteger ANALYZE_PEAK = new AtomicInteger(0);
+    /**
+     * Makes each analyze call linger, so calls actually overlap and the high-water mark reflects the
+     * fan-out's real concurrency. Without it every chunk finishes before the next starts and the peak
+     * stays near 1 whatever the bound is.
+     */
+    private static final AtomicInteger ANALYZE_DELAY_MS = new AtomicInteger(0);
     private static final AtomicInteger CONSOLIDATE_CALLS = new AtomicInteger(0);
 
     private static final AtomicReference<CountDownLatch> ANALYZE_STARTED = new AtomicReference<>();
@@ -107,6 +116,9 @@ class AnalysisControllerTest implements TestPropertyProvider {
         API_KEY.set(Optional.of("test-key"));
         TOKEN_RESULT.set(10);
         ANALYZE_CALLS.clear();
+        ANALYZE_INFLIGHT.set(0);
+        ANALYZE_PEAK.set(0);
+        ANALYZE_DELAY_MS.set(0);
         CONSOLIDATE_CALLS.set(0);
         ANALYZE_STARTED.set(null);
         ANALYZE_RELEASE.set(null);
@@ -149,17 +161,31 @@ class AnalysisControllerTest implements TestPropertyProvider {
             @Override
             public AnalysisResponse analyze(String transcript) {
                 ANALYZE_CALLS.add(transcript);
-                if (ANALYZE_FAILS.get()) throw new RuntimeException("analyze failed");
-                CountDownLatch started = ANALYZE_STARTED.get();
-                if (started != null) {
-                    started.countDown();
-                    try {
-                        ANALYZE_RELEASE.get().await(10, TimeUnit.SECONDS);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
+                int inFlight = ANALYZE_INFLIGHT.incrementAndGet();
+                ANALYZE_PEAK.accumulateAndGet(inFlight, Math::max);
+                try {
+                    int delay = ANALYZE_DELAY_MS.get();
+                    if (delay > 0) {
+                        try {
+                            Thread.sleep(delay);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
                     }
+                    if (ANALYZE_FAILS.get()) throw new RuntimeException("analyze failed");
+                    CountDownLatch started = ANALYZE_STARTED.get();
+                    if (started != null) {
+                        started.countDown();
+                        try {
+                            ANALYZE_RELEASE.get().await(10, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }
+                    return ANALYZE_RESULT.get();
+                } finally {
+                    ANALYZE_INFLIGHT.decrementAndGet();
                 }
-                return ANALYZE_RESULT.get();
             }
 
             @Override
@@ -377,6 +403,41 @@ class AnalysisControllerTest implements TestPropertyProvider {
         assertEquals("Final Title", node.get("shortTitle").asText());
         assertEquals(3, ANALYZE_CALLS.size());
         assertTrue(CONSOLIDATE_CALLS.get() >= 1);
+    }
+
+    /**
+     * The chunk fan-out is driven by the size of an ingested transcript, so it must not scale the
+     * work it hands the shared IO executor with that size. Workers pull chunks from a cursor rather
+     * than one task being submitted per chunk; this pins the two properties that refactor could
+     * break — every chunk still analyzed, and never more than the intended number at once.
+     */
+    @Test
+    void aManyChunkTranscriptStaysWithinTheConcurrencyBoundAndAnalyzesEveryChunk()
+        throws IOException {
+        String id = "many-chunk-session";
+        int lines = 60;
+        StringBuilder raw = new StringBuilder("[");
+        for (int i = 0; i < lines; i++) {
+            if (i > 0) raw.append(",");
+            raw.append("{\"type\":\"USER_INPUT\",\"content\":\"line ").append(i).append("\"}");
+        }
+        raw.append("]");
+        seed("antigravity-cli", id, raw.toString());
+        // Force every multi-line join over budget so chunking splits down to single lines.
+        TOKEN_RESULT.set(100_001);
+        // Let the calls overlap; otherwise each finishes before the next starts and the peak is 1.
+        ANALYZE_DELAY_MS.set(60);
+
+        JsonNode node = MAPPER.readTree(
+            post("/api/analysis/conversations/" + id + "/summarize?force=true")
+        );
+
+        assertEquals("Final Title", node.get("shortTitle").asText());
+        assertEquals(lines, ANALYZE_CALLS.size(), "every chunk must be analyzed exactly once");
+        assertTrue(
+            ANALYZE_PEAK.get() <= 20,
+            "chunk analyses must stay within the concurrency bound, saw " + ANALYZE_PEAK.get()
+        );
     }
 
     @Test

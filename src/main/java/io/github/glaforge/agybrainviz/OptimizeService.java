@@ -28,6 +28,8 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The "prompt lab": eval-driven prompt optimization. Given two analysis instructions, it re-analyzes
@@ -37,6 +39,8 @@ import java.util.concurrent.Semaphore;
  */
 @Singleton
 public class OptimizeService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(OptimizeService.class);
 
     /** The baseline analysis instruction the current pipeline effectively uses (variant A default). */
     public static final String DEFAULT_INSTRUCTION = """
@@ -135,7 +139,9 @@ public class OptimizeService {
             String id = session.id() == null ? "unknown" : session.id();
             return EvalScorer.score(id, session.steps(), analysis);
         } catch (Exception e) {
-            System.err.println("Prompt-lab analysis failed: " + e.getMessage());
+            // The message can quote ingested text back, so escape it and use the logger rather than
+            // raw stderr, which no appender formats.
+            LOG.warn("Prompt-lab analysis failed: {}", LogSafe.escape(e.getMessage()));
             return null;
         } finally {
             rateLimit.release();

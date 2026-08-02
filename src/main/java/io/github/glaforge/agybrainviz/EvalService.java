@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The analysis-quality eval harness: gathers a source's sessions via {@link SessionCollector}, grades
@@ -41,6 +43,8 @@ import java.util.concurrent.Semaphore;
  */
 @Singleton
 public class EvalService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(EvalService.class);
 
     private static final int WORST_CASES = 10;
     /** Cap the (LLM) judged sample so the opt-in judge stays responsive on large histories. */
@@ -206,7 +210,14 @@ public class EvalService {
                 )
             );
         } catch (Exception e) {
-            System.err.println("Judge lens failed for " + j.id() + ": " + e.getMessage());
+            // The id came from an ingest push, so it is escaped: a raw CR/LF in it would otherwise
+            // forge whole log records. Routed through the logger so the appender's formatting (and
+            // the JSON encoder, when configured) applies, rather than raw stderr.
+            LOG.warn(
+                "Judge lens failed for {}: {}",
+                LogSafe.escape(j.id()),
+                LogSafe.escape(e.getMessage())
+            );
             return null;
         } finally {
             rateLimit.release();

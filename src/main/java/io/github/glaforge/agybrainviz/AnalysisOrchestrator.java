@@ -32,7 +32,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.ToIntFunction;
@@ -240,71 +239,98 @@ public class AnalysisOrchestrator {
         return jsonResponse;
     }
 
+    /**
+     * How many chunks of one transcript are analyzed at a time, and — because each is handled by a
+     * worker rather than its own task — how many threads the fan-out can occupy.
+     */
+    private static final int MAX_CONCURRENT_CHUNK_ANALYSES = 20;
+
+    /**
+     * Analyzes every chunk, at most {@link #MAX_CONCURRENT_CHUNK_ANALYSES} at a time.
+     *
+     * <p>The work is pulled by a fixed set of workers rather than pushed as one task per chunk. That
+     * distinction matters: the injected IO executor is a <em>cached</em> pool with no thread ceiling,
+     * so submitting one task per chunk and having all but twenty of them block on a semaphore meant
+     * no pooled thread was ever idle, and the pool grew a new platform thread for every chunk. Since
+     * the chunk count follows the size of an ingested transcript, that let a large pushed session
+     * park hundreds of threads — starving every other IO-bound endpoint sharing the pool, and
+     * reaching {@code OutOfMemoryError: unable to create native thread} under a container limit.
+     *
+     * <p>Results stay in chunk order: workers write into a slot each, and the array is collected
+     * after every worker has finished, which also publishes their writes safely.
+     */
     private List<AnalysisResponse> analyzeChunksInParallel(
         String key,
         List<List<String>> optimalChunks
     ) throws Exception {
-        List<Future<AnalysisResponse>> futures = new ArrayList<>();
         AtomicInteger completed = new AtomicInteger(0);
+        AtomicInteger cursor = new AtomicInteger(0);
+        AnalysisResponse[] results = new AnalysisResponse[optimalChunks.size()];
 
-        // Limit to 20 concurrent LLM requests, as we have drastically reduced chunk count
-        Semaphore rateLimitSemaphore = new Semaphore(20);
-
-        for (List<String> chunkLines : optimalChunks) {
-            futures.add(
+        int workerCount = Math.min(MAX_CONCURRENT_CHUNK_ANALYSES, optimalChunks.size());
+        List<Future<?>> workers = new ArrayList<>(workerCount);
+        for (int w = 0; w < workerCount; w++) {
+            workers.add(
                 executor.submit(() -> {
-                    try {
-                        rateLimitSemaphore.acquire();
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return null;
-                    }
-
-                    try {
-                        // The transcript was pushed by whoever could reach the ingest API: fence it
-                        // as untrusted data the model must describe rather than obey.
-                        String chunk = UntrustedText.fencedTranscript(
-                            String.join("\n", chunkLines)
-                        );
-                        AnalysisResponse seqResponse = null;
-                        try {
-                            seqResponse = analyzerService.analyze(chunk);
-                        } catch (Exception e) {
-                            // Ignore unparseable chunk
-                            LOG.warn("Failed to parse chunk from LLM", e);
-                        }
-
-                        int comp = completed.incrementAndGet();
-                        // Scale parallel processing to 90% of the total progress
-                        int pct = (int) Math.round((comp * 90.0) / optimalChunks.size());
-                        String phaseMsg =
-                            "Processing chunk " + comp + " of " + optimalChunks.size() + "...";
-
-                        // Prevent progress moving backwards if futures finish out of order
-                        progressMap.compute(
-                            key,
-                            (k, v) -> {
-                                if (v == null || pct > v.progress()) {
-                                    return new ProgressState(pct, phaseMsg);
-                                }
-                                return v;
-                            }
-                        );
-
-                        return seqResponse;
-                    } finally {
-                        rateLimitSemaphore.release();
+                    int index;
+                    while ((index = cursor.getAndIncrement()) < optimalChunks.size()) {
+                        results[index] =
+                            analyzeChunk(
+                                key,
+                                optimalChunks.get(index),
+                                optimalChunks.size(),
+                                completed
+                            );
                     }
                 })
             );
         }
+        for (Future<?> worker : workers) {
+            worker.get();
+        }
 
         List<AnalysisResponse> seqResponses = new ArrayList<>();
-        for (Future<AnalysisResponse> f : futures) {
-            AnalysisResponse r = f.get();
+        for (AnalysisResponse r : results) {
             if (r != null) seqResponses.add(r);
         }
         return seqResponses;
+    }
+
+    /** One chunk's LLM pass, plus the progress update it contributes. */
+    private AnalysisResponse analyzeChunk(
+        String key,
+        List<String> chunkLines,
+        int totalChunks,
+        AtomicInteger completed
+    ) {
+        // The transcript was pushed by whoever could reach the ingest API: fence it as untrusted
+        // data the model must describe rather than obey.
+        String chunk = UntrustedText.fencedTranscript(String.join("\n", chunkLines));
+        AnalysisResponse seqResponse = null;
+        try {
+            seqResponse = analyzerService.analyze(chunk);
+        } catch (Exception e) {
+            // Ignore unparseable chunk
+            LOG.warn("Failed to parse chunk from LLM", e);
+        }
+
+        int comp = completed.incrementAndGet();
+        // Scale parallel processing to 90% of the total progress
+        int pct = (int) Math.round((comp * 90.0) / totalChunks);
+        String phaseMsg = "Processing chunk " + comp + " of " + totalChunks + "...";
+
+        // Prevent progress moving backwards if chunks finish out of order
+        progressMap.compute(
+            key,
+            (k, v) -> {
+                if (v == null || pct > v.progress()) {
+                    return new ProgressState(pct, phaseMsg);
+                }
+                return v;
+            }
+        );
+
+        return seqResponse;
     }
 
     /**
