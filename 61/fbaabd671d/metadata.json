@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "61fbaabd671d",
+  "strategy": "manual-commit",
+  "branch": "upload-referenced-files",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "cli/README.md",
+    "cli/internal/client/client.go",
+    "cli/main.go",
+    "e2e/sessions.spec.js",
+    "src/main/resources/public/modules/ui.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/61/fbaabd671d/0/metadata.json",
+      "transcript": "/61/fbaabd671d/0/full.jsonl",
+      "compact_transcript": "/61/fbaabd671d/0/transcript.jsonl",
+      "content_hash": "/61/fbaabd671d/0/content_hash.txt",
+      "prompt": "/61/fbaabd671d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2920,
+    "cache_creation_tokens": 5189998,
+    "cache_read_tokens": 277764757,
+    "output_tokens": 463950,
+    "api_call_count": 707
+  }
+}
