@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "bed3d7834c42",
+  "strategy": "manual-commit",
+  "branch": "bump-setup-go",
+  "checkpoints_count": 5,
+  "files_touched": [
+    ".github/workflows/ci.yml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/be/d3d7834c42/0/metadata.json",
+      "transcript": "/be/d3d7834c42/0/full.jsonl",
+      "compact_transcript": "/be/d3d7834c42/0/transcript.jsonl",
+      "content_hash": "/be/d3d7834c42/0/content_hash.txt",
+      "prompt": "/be/d3d7834c42/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3022,
+    "cache_creation_tokens": 5997819,
+    "cache_read_tokens": 319622734,
+    "output_tokens": 492335,
+    "api_call_count": 761
+  }
+}
