@@ -39,6 +39,23 @@ public class Ingestor {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /**
+     * Largest cached analysis this server will store for one session.
+     *
+     * <p>A pushed summary is the one piece of client input that outlives its request: it lands in the
+     * {@code summaries} table, and every cross-session endpoint ({@code /api/insights}, {@code
+     * /api/eval}, {@code /api/mine}, {@code /api/optimize}) later parses up to 150 of them into
+     * object trees at once. Without a bound, a handful of oversized documents do not merely make one
+     * request expensive — they make every subsequent read of those endpoints fail, until the rows are
+     * deleted by hand.
+     *
+     * <p>The ceiling is set above anything the server itself produces: {@link
+     * AnalysisOrchestrator#normalize} bounds a model's analysis to roughly 120 KB of text in the
+     * worst case, so 256 KiB leaves generous headroom while keeping the aggregate of 150 summaries
+     * to a size the heap can hold.
+     */
+    static final int MAX_SUMMARY_CHARS = 256 * 1024;
+
     private final List<SourceNormalizer> normalizers;
     private final SessionRepository sessions;
     private final SummaryRepository summaries;
@@ -111,6 +128,17 @@ public class Ingestor {
         // failure. Doing the check here, rather than catching the store's exception, keeps a genuine
         // store outage propagating out of the batch — a 503, exactly as a pushed trajectory behaves —
         // instead of being masked as a per-item failure inside a 200 response.
+        // Oversized bodies are rejected the same way, and for the same reason: this row is read back
+        // by every cross-session endpoint, so accepting it would degrade far more than this request.
+        if (pushed.summary().length() > MAX_SUMMARY_CHARS) {
+            LOG.warn(
+                "Rejecting summary for {}: body is {} chars, over the {} limit",
+                LogSafe.escape(pushed.id()),
+                pushed.summary().length(),
+                MAX_SUMMARY_CHARS
+            );
+            return Outcome.FAILED;
+        }
         if (!isValidJson(pushed.summary())) {
             LOG.warn(
                 "Rejecting summary for {}: body is not valid JSON",
@@ -177,7 +205,19 @@ public class Ingestor {
         // the rest of the batch — the transcript is what matters, so log it and move on.
         if (!isBlank(pushed.summary())) {
             try {
-                summaries.upsert(pushed.source(), pushed.id(), pushed.summary(), title);
+                if (pushed.summary().length() > MAX_SUMMARY_CHARS) {
+                    // Same bound as the dedicated summaries endpoint, but a rejection here only drops
+                    // the cached analysis: the transcript is what matters, and the session it rode in
+                    // with has already been stored.
+                    LOG.warn(
+                        "Stored trajectory {} but dropped its pushed summary: {} chars, over the {} limit",
+                        LogSafe.escape(pushed.id()),
+                        pushed.summary().length(),
+                        MAX_SUMMARY_CHARS
+                    );
+                } else {
+                    summaries.upsert(pushed.source(), pushed.id(), pushed.summary(), title);
+                }
             } catch (RuntimeException e) {
                 LOG.warn(
                     "Stored trajectory {} but could not store its pushed summary: {}",
