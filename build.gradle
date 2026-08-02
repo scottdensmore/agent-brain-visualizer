@@ -55,8 +55,8 @@ dependencies {
 
     // Testcontainers: H2's Postgres mode does not honour jsonb or `ON CONFLICT ... WHERE`,
     // so repository tests run against a real Postgres.
-    testImplementation("org.testcontainers:postgresql:1.20.4")
-    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("org.testcontainers:postgresql:1.21.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.21.4")
 
     // Dependencies end here
 }
