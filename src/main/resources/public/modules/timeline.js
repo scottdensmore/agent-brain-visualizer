@@ -397,10 +397,13 @@ export function renderTranscript(steps, container) {
                   let linksHtml = ids
                     .map((id) => {
                       // Search-result URLs are untrusted; escape so one can't break out of the href.
+                      // Styling lives in a class rather than a style attribute because this markup
+                      // is built into the content that renderMarkdown sanitizes, and the sanitizer
+                      // strips style/target so transcript text cannot use them (see utils.js).
                       if (linkMap[id])
                         return `<a href="${escapeHtml(
                           linkMap[id]
-                        )}" target="_blank" rel="noopener" style="text-decoration:none; color:var(--accent-blue); font-weight:600;">${id}</a>`;
+                        )}" rel="noopener noreferrer" class="citation-link">${id}</a>`;
                       return id;
                     })
                     .join(", ");

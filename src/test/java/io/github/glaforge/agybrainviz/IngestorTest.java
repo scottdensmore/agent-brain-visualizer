@@ -157,6 +157,59 @@ class IngestorTest extends PostgresTest {
         assertTrue(summaries.find("antigravity-cli", "s1").isEmpty()); // the bad summary was dropped
     }
 
+    /**
+     * A stored summary is read back by every cross-session endpoint, up to 150 at a time, so an
+     * oversized one degrades far more than the request that pushed it — it keeps degrading until the
+     * row is deleted by hand. Both routes that accept a summary have to bound it.
+     */
+    private static String oversizedSummary() {
+        return "{\"summary\":\"" + "a".repeat(Ingestor.MAX_SUMMARY_CHARS) + "\"}";
+    }
+
+    @Test
+    void anOversizedSummaryIsRejectedOnItsOwnEndpoint() {
+        IngestResult result = ingestor.ingestSummaries(
+            List.of(new IngestSummary("antigravity-cli", "s1", oversizedSummary()))
+        );
+
+        assertEquals(new IngestResult(0, 0, 1), result);
+        assertTrue(summaries.find("antigravity-cli", "s1").isEmpty());
+    }
+
+    @Test
+    void anOversizedSummaryRidingWithATrajectoryIsDroppedButTheSessionStillIngests() {
+        // Same bound, different consequence: the transcript is what matters, so it is kept.
+        IngestResult result = ingestor.ingest(
+            List.of(
+                new IngestSession(
+                    "antigravity-cli",
+                    "s1",
+                    null,
+                    1L,
+                    ANTIGRAVITY_RAW,
+                    oversizedSummary()
+                )
+            )
+        );
+
+        assertEquals(new IngestResult(1, 0, 0), result);
+        assertTrue(summaries.find("antigravity-cli", "s1").isEmpty());
+    }
+
+    @Test
+    void aSummaryAtTheLimitIsStillAccepted() {
+        // The bound must not reject a legitimately large analysis; the server's own normalizer
+        // produces roughly 120 KB in the worst case, well under the limit.
+        String body = "{\"summary\":\"" + "a".repeat(Ingestor.MAX_SUMMARY_CHARS - 20) + "\"}";
+        assertTrue(body.length() <= Ingestor.MAX_SUMMARY_CHARS);
+
+        assertEquals(
+            new IngestResult(1, 0, 0),
+            ingestor.ingestSummaries(List.of(new IngestSummary("antigravity-cli", "s1", body)))
+        );
+        assertTrue(summaries.find("antigravity-cli", "s1").isPresent());
+    }
+
     private String storedSteps(String source, String id) throws SQLException {
         try (
             Connection c = dataSource().getConnection();
