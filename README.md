@@ -65,7 +65,7 @@ This project prioritizes a lightweight, high-performance, and maintainable archi
 
 The easiest way to install and use the Agent Brain Visualizer is to download the pre-compiled native executable for your operating system.
 
-1. Navigate to the [Releases](https://github.com/glaforge/antigravity-brain-visualizer/releases) section of this repository.
+1. Navigate to the [Releases](https://github.com/scottdensmore/agent-brain-visualizer/releases) section of this repository.
 2. Download the appropriate `.zip` asset for your OS (macOS, Linux, or Windows).
 3. Unzip the downloaded file.
 4. Make the extracted file executable if necessary (e.g., `chmod +x agy-brain-viz`).
@@ -176,7 +176,16 @@ docker compose up -d postgres              # or just `docker compose up -d`
 #### Pushing trajectories into the store
 
 Trajectories get into the store by being **pushed** to the app, so any machine — and any client, in
-any language — can contribute the sessions its agents recorded:
+any language — can contribute the sessions its agents recorded.
+
+The supplied client is [`agent-ingest`](cli/README.md), a single Go binary. Install it from a
+[release](https://github.com/scottdensmore/agent-brain-visualizer/releases/latest), with `go install
+github.com/scottdensmore/agent-brain-visualizer/cli@latest`, or run it straight from a checkout with
+`go run .` — see [Install](cli/README.md#install) for all four routes and
+[Pointing it at a shared visualizer](cli/README.md#pointing-it-at-a-shared-visualizer) for connecting
+it to a server on your network.
+
+Writing your own client is a small job, because the API is four endpoints:
 
 | Endpoint | Purpose |
 | -------- | ------- |

@@ -21,26 +21,74 @@ still lands.
 
 ## Install
 
-Download the binary for your platform from the
-[latest release](https://github.com/scottdensmore/antigravity-brain-visualizer/releases/latest) —
-assets are named `agent-ingest-<os>-<arch>` (`linux`/`macos`/`windows`, `amd64`/`arm64`):
+Four ways, depending on whether you have Go and whether you want it on your PATH.
+
+### A pre-built binary (no Go needed)
+
+Assets on the [latest release](https://github.com/scottdensmore/agent-brain-visualizer/releases/latest)
+are named `agent-ingest-<os>-<arch>` (`linux`/`macos`/`windows`, `amd64`/`arm64`):
 
 ```bash
 # Linux/macOS — pick your platform, e.g. macos-arm64 for Apple silicon:
 curl -sSL -o agent-ingest \
-  https://github.com/scottdensmore/antigravity-brain-visualizer/releases/latest/download/agent-ingest-macos-arm64
+  https://github.com/scottdensmore/agent-brain-visualizer/releases/latest/download/agent-ingest-macos-arm64
 chmod +x agent-ingest
 ./agent-ingest --version
 ```
 
-Or build from source (Go 1.23+). Stamp the version so `--version` reports which build you're running:
+Move it somewhere on your PATH (`/usr/local/bin`, `~/.local/bin`) to run it as `agent-ingest`.
+
+### `go install` (Go 1.26+)
 
 ```bash
-cd cli
-go build -ldflags "-X main.version=$(git describe --tags --always)" -o agent-ingest .
+go install github.com/scottdensmore/agent-brain-visualizer/cli@latest
 ```
 
-(A plain `go build -o agent-ingest .` works too; it just reports `dev` as the version.)
+> [!NOTE]
+> This installs a binary named **`cli`**, not `agent-ingest` — Go names it after the last element
+> of the module path. Rename it once and you are done:
+>
+> ```bash
+> # Go installs into GOBIN when it is set, otherwise GOPATH/bin.
+> dest="$(go env GOBIN)"; dest="${dest:-$(go env GOPATH)/bin}"
+> mv "$dest/cli" "$dest/agent-ingest"
+> ```
+>
+> Don't assume `$(go env GOPATH)/bin` — version managers such as mise, asdf and Homebrew's Go
+> often set `GOBIN` elsewhere, and the rename silently targets the wrong directory if you do.
+>
+> `--version` reports `dev` for a `go install` build; the release binaries and the `go build`
+> recipe below carry a real version.
+
+### Build from source
+
+```bash
+git clone https://github.com/scottdensmore/agent-brain-visualizer
+cd agent-brain-visualizer/cli
+
+# Stamp the version so --version reports which build you're running:
+go build -ldflags "-X main.version=$(git describe --tags --always)" -o agent-ingest .
+./agent-ingest --version        # e.g. agent-ingest v0.3.0-24-gcbd6548
+```
+
+A plain `go build -o agent-ingest .` works too; it just reports `dev`.
+
+### `go run`, without installing anything
+
+Useful for trying it once, or while working on the CLI itself — it compiles and runs in one step,
+leaving no binary behind:
+
+```bash
+cd agent-brain-visualizer/cli
+
+go run . --version
+go run . --dry-run                                   # see what would be pushed
+go run . --server http://mini.local:8080             # a real run
+```
+
+Everything after `go run .` is passed to the CLI, so any flag from the table below works. It
+recompiles on each invocation (a second or so), which is fine for occasional use and wrong for a
+schedule — use a built binary for anything on a timer.
 
 ## Use
 
