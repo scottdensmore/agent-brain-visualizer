@@ -36,7 +36,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     
     // LangChain4j BOM
-    implementation(platform("dev.langchain4j:langchain4j-bom:1.16.1"))
+    implementation(platform("dev.langchain4j:langchain4j-bom:1.18.0"))
 
     // LangChain4j Google GenAI
     implementation("dev.langchain4j:langchain4j-google-genai")
