@@ -81,7 +81,12 @@ services:
       # Override with LOG_APPENDER=CONSOLE_TEXT for human-readable container logs.
       LOG_APPENDER: ${LOG_APPENDER:-CONSOLE_JSON}
     ports:
-      - "8080:8080"
+      # Loopback only, like the postgres mapping above and the production override. A bare
+      # "8080:8080" binds 0.0.0.0, and Docker's publishing rules sit ahead of host firewalls like
+      # ufw — so with API_TOKEN/INGEST_TOKEN defaulting to empty just below, anyone on the LAN could
+      # read every stored trajectory and push their own. Serve other machines deliberately: set the
+      # tokens and widen this mapping.
+      - "127.0.0.1:8080:8080"
     healthcheck:
       # No curl in the JRE image, so use bash's /dev/tcp to make a minimal HTTP request to the
       # liveness probe and confirm a 200. Liveness (not readiness) on purpose: the app serves the UI
