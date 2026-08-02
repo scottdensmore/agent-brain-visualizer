@@ -242,44 +242,134 @@ reverse proxy — treat it as exposed and do the following:
 > read, so a history saved before this change won't appear. Nothing deletes it — you can remove it
 > by hand once you're happy.
 
-#### Serving your own network (a Mac mini, NAS, or spare box)
+#### Serving your own network (a Mac mini, NAS, or spare PC)
 
-To run the stack on an always-on machine that every computer on your **home or office network**
-reaches directly — no reverse proxy, no TLS, a network you trust — layer `docker-compose.lan.yml`
-on the base compose:
+The setup this is built for: one always-on machine runs the stack in Docker, and every laptop and
+desktop on your **home or office network** reads from it and pushes to it. No reverse proxy, no TLS,
+a network you trust. `docker-compose.lan.yml` is the overlay that does it.
+
+> [!NOTE]
+> Use `docker-compose.prod.yml` instead if the machine is reachable from the **internet**: it keeps
+> the app on loopback behind a TLS-terminating reverse proxy. The LAN overlay assumes plain HTTP on
+> a network you control.
+
+##### 1. What the machine needs
+
+Only Docker and git — no Java, Node, or Gradle, since the image builds itself.
+
+| | |
+| --- | --- |
+| **macOS** (Mac mini, iMac, spare MacBook) | [Docker Desktop](https://docs.docker.com/desktop/install/mac-install/), or [OrbStack](https://orbstack.dev) / [colima](https://github.com/abiosoft/colima) if you'd rather not run Docker Desktop on an always-on box |
+| **Linux** (NAS, mini PC, old tower) | Docker Engine plus the Compose plugin — `docker compose version` should print v2.24 or newer, which the overlay's merge tags need |
+| **Windows** | Docker Desktop with the WSL 2 backend |
+
+Give the machine a **static IP or a reserved DHCP lease** before you go further. Everything below
+points other computers at this address, and a machine that changes IP breaks every one of them
+silently.
+
+##### 2. Set it up
+
+Run this **on the server**, not on your laptop. Building there produces an image for that machine's
+own architecture, which matters on Apple silicon — an image built on an x86 PC would run under
+emulation, and a JVM under emulation is genuinely slow.
 
 ```bash
-# On the server, once:
-git clone https://github.com/scottdensmore/agent-brain-visualizer && cd agent-brain-visualizer
+git clone https://github.com/scottdensmore/agent-brain-visualizer
+cd agent-brain-visualizer
 
-# Two different secrets, in a .env beside the compose files:
-{ echo "API_TOKEN=$(openssl rand -hex 32)"; echo "INGEST_TOKEN=$(openssl rand -hex 32)"; } >> .env
-# and your GEMINI_API_KEY / AI_PROVIDER if you want AI summaries
+# Two different secrets, in a .env beside the compose files.
+{ echo "API_TOKEN=$(openssl rand -hex 32)"
+  echo "INGEST_TOKEN=$(openssl rand -hex 32)"
+  echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"; } >> .env
+
+# Optional, for AI summaries:
+echo "GEMINI_API_KEY=your-key-here" >> .env
 
 docker compose -f docker-compose.yml -f docker-compose.lan.yml --profile full up -d --build
 ```
 
-The overlay publishes the app on every interface (the base file keeps it on loopback, which is right
-for a laptop and wrong for a server), keeps Postgres off the network entirely, and turns on the
-fail-closed auth flags. It **refuses to start without both tokens** — publishing to the LAN without
-them would serve every stored trajectory, and accept pushes, from any device on the network.
+The first build takes a few minutes; after that `docker compose ... up -d` is seconds. Watch it come
+up with `docker compose logs -f app`, and look for the two posture lines:
 
-Then, from any computer on the network:
+```
+INFO  ApiSecurityAdvisory    - The read/compute API requires a bearer token (API_TOKEN); listening on 0.0.0.0 …
+INFO  IngestSecurityAdvisory - Ingest endpoints require a bearer token (INGEST_TOKEN).
+```
 
-- **The UI** — `http://<server>:8080`, e.g. `http://mini.local:8080`. It prompts once for `API_TOKEN`
-  and remembers it in that browser.
+If either says **UNAUTHENTICATED**, a token didn't reach the container — fix that before going on.
+
+**What the overlay changes.** It publishes the app on every interface (the base compose keeps it on
+loopback, which is right for a laptop and wrong for a server), keeps Postgres off the network
+entirely, and forces the fail-closed auth flags. It **refuses to start without both tokens**:
+publishing to a LAN without them would serve every stored trajectory — and accept pushes — from any
+device on the network. `POSTGRES_PASSWORD` is read only when the database volume is first created,
+so set it before the first `up`.
+
+##### 3. Reach it from your other machines
+
+Find the address on the server:
+
+```bash
+hostname                                  # e.g. "mini" → try http://mini.local:8080 first
+ipconfig getifaddr en0                    # macOS, wired (en1 for Wi-Fi)
+hostname -I | awk '{print $1}'            # Linux
+ipconfig                                  # Windows — the IPv4 address of the active adapter
+```
+
+`http://<name>.local:8080` works out of the box between Macs; on Linux it needs Avahi, and on
+Windows it needs Bonjour. The IP address always works. Check from another computer:
+
+```bash
+curl http://mini.local:8080/health                       # → {"status":"UP", …}
+curl -H "Authorization: Bearer $API_TOKEN" \
+     http://mini.local:8080/api/brain/conversations      # → JSON, not 401
+```
+
+- **The UI** — open `http://mini.local:8080`. It prompts once for `API_TOKEN` and remembers it in
+  that browser.
 - **Pushing trajectories** — point `agent-ingest` at the same address with `INGEST_TOKEN`; see
-  [cli/README.md](cli/README.md#pointing-it-at-a-shared-visualizer). Run once with `--no-cache` after
-  upgrading a server, so sessions already stored get their attached files uploaded.
+  [cli/README.md](cli/README.md#pointing-it-at-a-shared-visualizer). Run once with `--no-cache` from
+  each machine, so sessions it already scanned get pushed with their attached files.
 
-Give the server a static or reserved DHCP address before putting any of this in a schedule. Building
-on the server itself (as above) also gets you an image for its own architecture, which matters on
-Apple silicon — an image built on an x86 machine would run under emulation.
+If `/health` doesn't answer from another machine but does on the server itself, it's a firewall.
+macOS may prompt to allow incoming connections the first time. On Linux, note that Docker's
+publishing rules sit **ahead of** `ufw`, so the port is usually reachable even when ufw would deny
+it — which is exactly why the tokens are mandatory here.
 
-> [!NOTE]
-> Use `docker-compose.prod.yml` instead if the server is reachable from the **internet**: it keeps
-> the app on loopback behind a TLS-terminating reverse proxy. `docker-compose.lan.yml` assumes plain
-> HTTP on a network you trust.
+##### 4. Keep it running
+
+`restart: unless-stopped` brings the containers back after a reboot, but only once the Docker daemon
+is running:
+
+- **macOS** — enable *Start Docker Desktop when you sign in* in Docker Desktop's settings (OrbStack
+  has the same option). The machine must also reach the desktop, so turn off auto-sleep for an
+  always-on server: **System Settings → Energy** (or `sudo pmset -a sleep 0 disksleep 0`).
+- **Linux** — `sudo systemctl enable docker`.
+- **Windows** — enable *Start Docker Desktop when you log in*.
+
+##### 5. Update and back up
+
+```bash
+# Update to the latest version:
+cd agent-brain-visualizer && git pull
+docker compose -f docker-compose.yml -f docker-compose.lan.yml --profile full up -d --build
+
+# Back up the store (everything ingested lives in Postgres):
+docker exec agent-brain-viz-db pg_dump -U agentviz --data-only agentbrainviz \
+  | gzip > backup-$(date +%F).sql.gz
+
+# Restore into a fresh stack — start it first, then load the rows:
+gunzip -c backup-2026-08-01.sql.gz \
+  | docker exec -i agent-brain-viz-db psql -q -U agentviz agentbrainviz
+```
+
+`pg_dump` rather than copying the volume: it is consistent while the database is running, and the
+volume survives `docker compose down` anyway — only `down -v` destroys it.
+
+`--data-only` because the app recreates its own schema on every boot, so a dump carrying `CREATE
+TABLE` would restore into tables that already exist and spray `ERROR: relation already exists` —
+the rows still land, but the noise makes a working restore look broken. Restore into a **fresh**
+stack: loading rows on top of existing ones collides on the primary keys.
 
 #### Remote / production deployment
 
