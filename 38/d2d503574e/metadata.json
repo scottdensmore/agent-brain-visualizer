@@ -1,0 +1,24 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "38d2d503574e",
+  "strategy": "manual-commit",
+  "branch": "lan-compose-overlay",
+  "checkpoints_count": 3,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/38/d2d503574e/0/metadata.json",
+      "transcript": "/38/d2d503574e/0/full.jsonl",
+      "compact_transcript": "/38/d2d503574e/0/transcript.jsonl",
+      "content_hash": "/38/d2d503574e/0/content_hash.txt",
+      "prompt": "/38/d2d503574e/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2973,
+    "cache_creation_tokens": 5208161,
+    "cache_read_tokens": 299602201,
+    "output_tokens": 477257,
+    "api_call_count": 735
+  }
+}
