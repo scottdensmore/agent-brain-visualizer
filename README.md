@@ -242,6 +242,45 @@ reverse proxy — treat it as exposed and do the following:
 > read, so a history saved before this change won't appear. Nothing deletes it — you can remove it
 > by hand once you're happy.
 
+#### Serving your own network (a Mac mini, NAS, or spare box)
+
+To run the stack on an always-on machine that every computer on your **home or office network**
+reaches directly — no reverse proxy, no TLS, a network you trust — layer `docker-compose.lan.yml`
+on the base compose:
+
+```bash
+# On the server, once:
+git clone https://github.com/scottdensmore/agent-brain-visualizer && cd agent-brain-visualizer
+
+# Two different secrets, in a .env beside the compose files:
+{ echo "API_TOKEN=$(openssl rand -hex 32)"; echo "INGEST_TOKEN=$(openssl rand -hex 32)"; } >> .env
+# and your GEMINI_API_KEY / AI_PROVIDER if you want AI summaries
+
+docker compose -f docker-compose.yml -f docker-compose.lan.yml --profile full up -d --build
+```
+
+The overlay publishes the app on every interface (the base file keeps it on loopback, which is right
+for a laptop and wrong for a server), keeps Postgres off the network entirely, and turns on the
+fail-closed auth flags. It **refuses to start without both tokens** — publishing to the LAN without
+them would serve every stored trajectory, and accept pushes, from any device on the network.
+
+Then, from any computer on the network:
+
+- **The UI** — `http://<server>:8080`, e.g. `http://mini.local:8080`. It prompts once for `API_TOKEN`
+  and remembers it in that browser.
+- **Pushing trajectories** — point `agent-ingest` at the same address with `INGEST_TOKEN`; see
+  [cli/README.md](cli/README.md#pointing-it-at-a-shared-visualizer). Run once with `--no-cache` after
+  upgrading a server, so sessions already stored get their attached files uploaded.
+
+Give the server a static or reserved DHCP address before putting any of this in a schedule. Building
+on the server itself (as above) also gets you an image for its own architecture, which matters on
+Apple silicon — an image built on an x86 machine would run under emulation.
+
+> [!NOTE]
+> Use `docker-compose.prod.yml` instead if the server is reachable from the **internet**: it keeps
+> the app on loopback behind a TLS-terminating reverse proxy. `docker-compose.lan.yml` assumes plain
+> HTTP on a network you trust.
+
 #### Remote / production deployment
 
 To run the stack on a **server** that other machines reach over the network, layer the checked-in
