@@ -34,6 +34,12 @@ USER app
 
 EXPOSE 8080
 
+# application.yml binds loopback only, which is right for a host process but wrong here: inside the
+# container's own network namespace nothing else could reach it, so the published port would be dead.
+# In a container the boundary is Docker's port publishing — docker-compose.yml publishes to
+# 127.0.0.1, and the production override keeps it there behind a TLS-terminating proxy.
+ENV MICRONAUT_SERVER_HOST=0.0.0.0
+
 # Same probe as the `app` healthcheck in docker-compose.yml (which takes precedence under compose),
 # so the image also self-reports health under plain `docker run` or other orchestrators. The JRE
 # image ships bash but no curl/wget, hence bash's /dev/tcp for a minimal HTTP request. Liveness

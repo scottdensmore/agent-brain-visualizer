@@ -2,6 +2,18 @@ micronaut:
   application:
     name: visualizer
   server:
+    # Listen on loopback only.
+    #
+    # The auth filters are open when no token is configured, and their comments justify that by
+    # presuming a localhost-only server. Nothing used to make that presumption true: with no host
+    # set, Micronaut binds the wildcard address, so the shipped default served every stored
+    # trajectory — and the ~/.gemini file preview — to anyone who could route a packet to this port.
+    #
+    # Serving other machines is a deliberate act now: set MICRONAUT_SERVER_HOST (and a token, which
+    # the startup advisory will tell you about). The container overrides this to 0.0.0.0 in the
+    # Dockerfile, because inside its own network namespace a loopback bind would make the published
+    # port unreachable — there, Docker's port publishing is the boundary.
+    host: 127.0.0.1
     # Agent transcripts routinely exceed Micronaut's 10 MB defaults, so a pushed session (or batch)
     # would 413. Both limits apply to a fully-buffered body and both default to 10 MB. This is a
     # ceiling for one very large session, not a target — the agent-ingest CLI keeps requests smaller.

@@ -197,9 +197,21 @@ another machine, and clients must then send `Authorization: Bearer <token>`.
 
 #### Securing an exposed deployment
 
-Run on localhost only and the defaults are fine. The moment the server is reachable from another
-machine — including any `docker compose --profile full up`, which publishes port 8080 on all
-interfaces — treat it as exposed and do the following:
+> [!IMPORTANT]
+> **Upgrading from a version before the loopback default?** The server now listens on `127.0.0.1`
+> only, and `docker compose` publishes 8080 to `127.0.0.1` too. If you were serving other machines,
+> they will stop reaching it: browsers show an empty page and `agent-ingest --server http://<host>`
+> fails to connect. To restore that deliberately, set `MICRONAUT_SERVER_HOST=0.0.0.0` (and
+> `API_TOKEN` / `INGEST_TOKEN` with it — see below), or widen the compose port mapping. The boot log
+> states which address it is listening on in every case.
+
+The defaults now keep the server on this machine: `micronaut.server.host` is `127.0.0.1`, so nothing
+else can reach it whether or not a token is set. That is what makes the open-by-default auth filters
+safe — previously nothing enforced the "localhost only" the code assumed, and the shipped default
+served every stored trajectory to anyone who could route a packet to the port.
+
+The moment you deliberately widen that — `MICRONAUT_SERVER_HOST`, a wider compose mapping, or a
+reverse proxy — treat it as exposed and do the following:
 
 - **Set `INGEST_TOKEN`.** Without it, the write endpoints are open to anyone who can reach the port,
   and a large pushed body can pin significant heap (the request is buffered whole). The server logs a
@@ -360,8 +372,9 @@ Every variable below can live in `.env` or be exported as an environment variabl
 | `POSTGRES_PASSWORD` | `agentviz`                                     | Store password                       |
 | `INGEST_TOKEN`      | _(unset — ingest is open)_                     | Bearer token required by `/api/ingest` |
 | `INGEST_REQUIRE_AUTH` | `false`                                      | When `true`, refuse all ingest until `INGEST_TOKEN` is set (fail closed) |
-| `API_TOKEN`         | _(unset — the API is open)_                    | Bearer token required by the rest of `/api` (transcripts, summarize, mine, eval, optimize); the web UI prompts for it once |
+| `API_TOKEN`         | _(unset — open, but loopback-only by default)_ | Bearer token required by the rest of `/api` (transcripts, summarize, mine, eval, optimize); the web UI prompts for it once |
 | `API_REQUIRE_AUTH`  | `false`                                        | When `true`, refuse those endpoints until `API_TOKEN` is set (fail closed) |
+| `MICRONAUT_SERVER_HOST` | `127.0.0.1`                                | Bind address. The default keeps the server on this machine; set `0.0.0.0` (with tokens) to serve others |
 | `LOG_APPENDER`      | `CONSOLE_TEXT` (the container defaults to `CONSOLE_JSON`) | Exactly `CONSOLE_TEXT` (readable colorized logs) or `CONSOLE_JSON` (one structured JSON object per line) |
 
 Once the server starts, open your web browser and navigate to [http://localhost:8080](http://localhost:8080) to interact with the visualizer.
@@ -374,6 +387,23 @@ parse. The Docker `full` profile turns this on automatically; set `LOG_APPENDER=
 get readable container logs back. The value must be exactly one of those two names — a typo leaves the
 root logger with no appender, so logging goes silent. This runtime switch applies to the JVM (the
 Docker image and `./gradlew run`); the native binary bakes its config at build time and logs in text.
+
+### Listening on Other Interfaces
+
+The server binds `127.0.0.1` by default, so only this machine can reach it. To serve other machines,
+set `MICRONAUT_SERVER_HOST` — and set `API_TOKEN` and `INGEST_TOKEN` at the same time, because the
+auth filters are open when no token is configured:
+
+```dotenv
+MICRONAUT_SERVER_HOST=0.0.0.0
+API_TOKEN=<openssl rand -hex 32>
+INGEST_TOKEN=<a different one>
+```
+
+The boot log names the address it is listening on and whether the API requires a token, so the
+posture is visible without reading the config. Under `docker compose` the container already binds
+`0.0.0.0` internally (it has to — otherwise the published port would be unreachable); what decides
+who can reach it there is the port mapping, which publishes to `127.0.0.1` by default.
 
 ### Customizing the Port
 
