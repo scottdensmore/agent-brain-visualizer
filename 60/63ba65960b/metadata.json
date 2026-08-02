@@ -1,0 +1,24 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "6063ba65960b",
+  "strategy": "manual-commit",
+  "branch": "bound-executor-and-log-sinks",
+  "checkpoints_count": 3,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/60/63ba65960b/0/metadata.json",
+      "transcript": "/60/63ba65960b/0/full.jsonl",
+      "compact_transcript": "/60/63ba65960b/0/transcript.jsonl",
+      "content_hash": "/60/63ba65960b/0/content_hash.txt",
+      "prompt": "/60/63ba65960b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2703,
+    "cache_creation_tokens": 4440387,
+    "cache_read_tokens": 196707383,
+    "output_tokens": 400418,
+    "api_call_count": 591
+  }
+}
