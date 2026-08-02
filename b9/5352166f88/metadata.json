@@ -1,0 +1,24 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "b95352166f88",
+  "strategy": "manual-commit",
+  "branch": "readme-lan-setup-guide",
+  "checkpoints_count": 3,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/b9/5352166f88/0/metadata.json",
+      "transcript": "/b9/5352166f88/0/full.jsonl",
+      "compact_transcript": "/b9/5352166f88/0/transcript.jsonl",
+      "content_hash": "/b9/5352166f88/0/content_hash.txt",
+      "prompt": "/b9/5352166f88/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3111,
+    "cache_creation_tokens": 6032457,
+    "cache_read_tokens": 359303252,
+    "output_tokens": 518721,
+    "api_call_count": 809
+  }
+}
