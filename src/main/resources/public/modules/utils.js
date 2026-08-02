@@ -40,9 +40,32 @@ export const FLAVOR_LABELS = {
 // happened to produce), so every piece of it that becomes HTML must pass through DOMPurify. The
 // default allowed URI schemes are extended with file:// — Antigravity transcripts link local files
 // that way and the click is intercepted for the in-app preview modal.
+//
+// DOMPurify's defaults stop scripts and event handlers, but they still allow several elements that
+// markdown has no use for and that let transcript text reshape the page it is rendered into. A
+// <style> block is not scoped to the transcript, so it can restyle or hide the application's own
+// chrome; a <form> renders inside the trusted origin, which — next to the app's real "this server
+// requires an API token" prompt — is enough to make a convincing one that posts the token elsewhere.
+// Forbidding them costs nothing: none survives a markdown round-trip legitimately.
 const PURIFY_CONFIG = {
   ALLOWED_URI_REGEXP:
     /^(?:(?:https?|mailto|file):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i,
+  FORBID_TAGS: [
+    "style",
+    "form",
+    "input",
+    "button",
+    "select",
+    "option",
+    "textarea",
+    "label",
+    "fieldset",
+    "legend",
+  ],
+  // `style` goes too: it is what turns an injected anchor into a transparent full-viewport overlay
+  // that swallows every click. The app's own citation links use a class instead (timeline.js), so
+  // nothing legitimate depends on it. `target` follows, so injected markup cannot open new contexts.
+  FORBID_ATTR: ["style", "action", "formaction", "method", "enctype", "target"],
 };
 
 /** Renders untrusted markdown to sanitized HTML. The only safe way to innerHTML transcript text. */

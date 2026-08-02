@@ -551,6 +551,14 @@ body {
 .json-boolean { color: #c084fc; }  /* Purple */
 .json-null { color: #94a3b8; }     /* Gray */
 
+/* SEARCH_WEB citation superscripts. Styled by class, not an inline style attribute: this markup is
+   built into content that DOMPurify sanitizes, and the sanitizer strips `style` (see utils.js). */
+.citation-link {
+    text-decoration: none;
+    color: var(--accent-blue);
+    font-weight: 600;
+}
+
 /* Shown instead of the rich formatting when a step body is too large to scan (see timeline.js). */
 .oversized-step-note {
     font-size: 0.85em;
