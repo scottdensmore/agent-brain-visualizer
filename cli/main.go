@@ -33,8 +33,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/scottdensmore/antigravity-brain-visualizer/cli/internal/client"
-	"github.com/scottdensmore/antigravity-brain-visualizer/cli/internal/scan"
+	"github.com/scottdensmore/agent-brain-visualizer/cli/internal/client"
+	"github.com/scottdensmore/agent-brain-visualizer/cli/internal/scan"
 )
 
 // version is overridden at build time with -ldflags "-X main.version=...".

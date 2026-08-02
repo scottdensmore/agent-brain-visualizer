@@ -28,8 +28,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/scottdensmore/antigravity-brain-visualizer/cli/internal/client"
-	"github.com/scottdensmore/antigravity-brain-visualizer/cli/internal/scan"
+	"github.com/scottdensmore/agent-brain-visualizer/cli/internal/client"
+	"github.com/scottdensmore/agent-brain-visualizer/cli/internal/scan"
 )
 
 // sha reuses the scanner's hash so the test asserts against the real contract.

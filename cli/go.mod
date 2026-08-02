@@ -1,3 +1,3 @@
-module github.com/scottdensmore/antigravity-brain-visualizer/cli
+module github.com/scottdensmore/agent-brain-visualizer/cli
 
 go 1.26
