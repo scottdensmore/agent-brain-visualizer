@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "1b13846fad3d",
+  "strategy": "manual-commit",
+  "branch": "bound-pushed-summaries",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "e2e/fixtures.mjs",
+    "e2e/security.spec.js",
+    "src/main/resources/public/modules/utils.js"
+  ],
+  "sessions": [
+    {
+      "metadata": "/1b/13846fad3d/0/metadata.json",
+      "transcript": "/1b/13846fad3d/0/full.jsonl",
+      "compact_transcript": "/1b/13846fad3d/0/transcript.jsonl",
+      "content_hash": "/1b/13846fad3d/0/content_hash.txt",
+      "prompt": "/1b/13846fad3d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2616,
+    "cache_creation_tokens": 4399392,
+    "cache_read_tokens": 167911245,
+    "output_tokens": 378384,
+    "api_call_count": 545
+  }
+}

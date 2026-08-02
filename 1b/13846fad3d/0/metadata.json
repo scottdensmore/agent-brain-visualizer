@@ -1,0 +1,141 @@
+{
+  "cli_version": "0.8.42",
+  "checkpoint_id": "1b13846fad3d",
+  "session_id": "c21c3560-2710-4c07-927e-0fd1f08468da",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-02T00:01:53.229484028Z",
+  "branch": "bound-pushed-summaries",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [
+    "e2e/fixtures.mjs",
+    "e2e/security.spec.js",
+    "src/main/resources/public/modules/utils.js"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "3cd08942a149",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 2616,
+    "cache_creation_tokens": 4399392,
+    "cache_read_tokens": 167911245,
+    "output_tokens": 378384,
+    "api_call_count": 545
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-doctor-2026-07-26T16:40:29.868997943Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "doctor"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "0dd39309ef52",
+      "timestamp": "2026-07-26T16:40:29.868997943Z",
+      "native": {
+        "command": "/doctor"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/doctor",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "prompt-skill-claude-code-security-review-2026-07-26T19:15:49.434463053Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "security-review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "bf7584c28e5e",
+      "timestamp": "2026-07-26T19:15:49.434463053Z",
+      "native": {
+        "command": "/security-review"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/security-review",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "prompt-skill-claude-code-claude-security-2026-07-26T19:16:12.008989006Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "claude-security"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "a7d4ae0d67f1",
+      "timestamp": "2026-07-26T19:16:12.008989006Z",
+      "native": {
+        "command": "/claude-security"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/claude-security",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01GJpCeWAydLtSMgikDvWBuo",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "update-config"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "3cd08942a149",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 960,
+        "end": 961,
+        "entry_ids": [
+          "2d620ee0-6d68-4bd1-991a-269aec3fe75c"
+        ],
+        "tool_use_id": "toolu_01GJpCeWAydLtSMgikDvWBuo"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01GJpCeWAydLtSMgikDvWBuo"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: update-config",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 31
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-02T00:01:51.726464864Z",
+    "agent_lines": 65,
+    "agent_removed": 1,
+    "human_added": 12,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 77,
+    "total_lines_changed": 79,
+    "agent_percentage": 83.54430379746836,
+    "metric_version": 2
+  }
+}
