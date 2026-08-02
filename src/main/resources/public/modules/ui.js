@@ -66,9 +66,16 @@ export async function openFilePreview(path) {
   const modalContent = document.getElementById("file-modal-content");
 
   try {
-    const res = await apiFetch(
-      `/api/brain/file?path=${encodeURIComponent(path)}`
-    );
+    // Name the session so the server can serve the copy the ingest client attached to it, which is
+    // what makes the preview work when the viewer is not the machine that ran the agent. Without
+    // these the server falls back to reading its own disk, which only works locally.
+    const params = new URLSearchParams({ path });
+    const sessionId = document.getElementById("current-session-id")?.dataset.id;
+    const flavor = document.getElementById("flavor-select")?.value;
+    if (sessionId) params.set("id", sessionId);
+    if (flavor) params.set("flavor", flavor);
+
+    const res = await apiFetch(`/api/brain/file?${params}`);
     if (!res.ok) {
       if (res.status === 404) throw new Error("File not found");
       throw new Error("Failed to load file");

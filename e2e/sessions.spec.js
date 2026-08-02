@@ -4,14 +4,16 @@ test.describe("session browsing", () => {
   test("lists the seeded sessions", async ({ page }) => {
     await page.goto("/");
     const items = page.locator("#conversations-list .conv-item");
-    await expect(items).toHaveCount(2);
+    // Three antigravity-cli fixtures: the two below plus the attached-file session that proves the
+    // preview works off-machine (see file-preview.spec.js).
+    await expect(items).toHaveCount(3);
     await expect(page.locator(".conv-item", { hasText: "Fix the parser bug" })).toBeVisible();
     await expect(page.locator(".conv-item", { hasText: "Add dark mode" })).toBeVisible();
   });
 
   test("search filters the list", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("#conversations-list .conv-item")).toHaveCount(2);
+    await expect(page.locator("#conversations-list .conv-item")).toHaveCount(3);
     await page.fill("#conversation-search", "parser");
     await expect(page.locator("#conversations-list .conv-item")).toHaveCount(1);
     await expect(page.locator("#conversations-list .conv-item")).toContainText(
@@ -25,14 +27,15 @@ test.describe("session browsing", () => {
       "Add dark mode"
     );
     await page.click("#sort-conversations-btn");
+    // Oldest first: the attached-file session carries the earliest mtime of the three.
     await expect(page.locator("#conversations-list .conv-item").first()).toContainText(
-      "Fix the parser bug"
+      "Attached file from another machine"
     );
   });
 
   test("switching flavor loads that flavor's sessions", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("#conversations-list .conv-item")).toHaveCount(2);
+    await expect(page.locator("#conversations-list .conv-item")).toHaveCount(3);
     await page.selectOption("#flavor-select", "antigravity-ide");
     // The IDE flavor holds its own session plus the hostile XSS fixture (see security.spec.js).
     await expect(page.locator("#conversations-list .conv-item")).toHaveCount(2);
@@ -63,7 +66,7 @@ test.describe("session browsing", () => {
     const page1 = await (
       await request.get("/api/brain/conversations?flavor=antigravity-cli&limit=1&offset=0")
     ).json();
-    expect(page1.total).toBe(2);
+    expect(page1.total).toBe(3);
     expect(page1.items).toHaveLength(1);
 
     const page2 = await (

@@ -19,6 +19,7 @@ import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -59,16 +60,19 @@ public class Ingestor {
     private final List<SourceNormalizer> normalizers;
     private final SessionRepository sessions;
     private final SummaryRepository summaries;
+    private final SessionFileRepository sessionFiles;
 
     @Inject
     public Ingestor(
         List<SourceNormalizer> normalizers,
         SessionRepository sessions,
-        SummaryRepository summaries
+        SummaryRepository summaries,
+        SessionFileRepository sessionFiles
     ) {
         this.normalizers = normalizers;
         this.sessions = sessions;
         this.summaries = summaries;
+        this.sessionFiles = sessionFiles;
     }
 
     /** Stores a batch, counting each trajectory as ingested, skipped (unchanged), or failed. */
@@ -150,6 +154,44 @@ public class Ingestor {
         return written ? Outcome.INGESTED : Outcome.SKIPPED;
     }
 
+    /**
+     * Largest attached file this server will store, and how many per session.
+     *
+     * <p>The ingest client applies its own limits, but a client is not something the server gets to
+     * trust: these bound what any caller can put in the store, for the same reason the summary bound
+     * exists — attachments are read back by the preview and live on after the request.
+     */
+    static final int MAX_FILE_CHARS = 512 * 1024;
+    static final int MAX_FILES_PER_SESSION = 50;
+
+    /** Drops attachments the store will not accept, keeping the rest rather than failing the push. */
+    private List<IngestFile> acceptableFiles(IngestSession pushed) {
+        List<IngestFile> accepted = new ArrayList<>();
+        for (IngestFile file : pushed.files()) {
+            if (file == null || isBlank(file.path()) || file.content() == null) continue;
+            if (accepted.size() >= MAX_FILES_PER_SESSION) {
+                LOG.warn(
+                    "Trajectory {} attached more than {} files; the rest were dropped",
+                    LogSafe.escape(pushed.id()),
+                    MAX_FILES_PER_SESSION
+                );
+                break;
+            }
+            if (file.content().length() > MAX_FILE_CHARS) {
+                LOG.warn(
+                    "Dropping attached file {} for {}: {} chars, over the {} limit",
+                    LogSafe.escape(file.path()),
+                    LogSafe.escape(pushed.id()),
+                    file.content().length(),
+                    MAX_FILE_CHARS
+                );
+                continue;
+            }
+            accepted.add(file);
+        }
+        return accepted;
+    }
+
     private static boolean isValidJson(String value) {
         try {
             MAPPER.readTree(value);
@@ -203,6 +245,22 @@ public class Ingestor {
         // machine that already generated one doesn't force every viewer to recompute it. A summary
         // that won't store (e.g. it isn't valid jsonb) must not sink the session it rode in with, nor
         // the rest of the batch — the transcript is what matters, so log it and move on.
+        // Attached files ride with the transcript so the inline preview works from any machine. Like
+        // a pushed summary, they must not sink the session they came with: the transcript is what
+        // matters and is already stored, so a failure here is logged and the push still counts.
+        try {
+            List<IngestFile> accepted = acceptableFiles(pushed);
+            if (!accepted.isEmpty() || !pushed.files().isEmpty()) {
+                sessionFiles.replaceForSession(pushed.source(), pushed.id(), accepted);
+            }
+        } catch (RuntimeException e) {
+            LOG.warn(
+                "Stored trajectory {} but could not store its attached files: {}",
+                LogSafe.escape(pushed.id()),
+                LogSafe.escape(e.getMessage())
+            );
+        }
+
         if (!isBlank(pushed.summary())) {
             try {
                 if (pushed.summary().length() > MAX_SUMMARY_CHARS) {

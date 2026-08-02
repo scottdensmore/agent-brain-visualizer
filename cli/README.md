@@ -66,6 +66,21 @@ stat'ed. The cache is purely an optimization: it never affects what the server r
 (the server-side manifest diff is always consulted), and a missing, corrupt, or
 unwritable cache just falls back to full hashing. `--no-cache` forces that full re-hash.
 
+## Attached files
+
+Antigravity transcripts record the files a prompt attached (`@[name] is a [File]:`), and the viewer
+turns them into clickable previews. Those files live on the machine that ran the agent, so a
+visualizer running anywhere else could not show them — it read its own disk. `agent-ingest` now
+uploads them with the session, and the server serves that copy.
+
+Only files the transcript explicitly references are sent — a path that merely appears in tool output
+is not. Each must be under 256 KiB, at most 25 travel with one session, and anything that looks like
+credential material is refused whatever the transcript says: `.env` and friends, `*.pem`, `*.key`,
+`id_rsa`, `oauth_creds.json`, and paths under `.ssh`, `.aws`, or `.gnupg`. Every skip is reported on
+stderr, so a file left behind is visible rather than silent.
+
+Pass `--no-upload-files` to send none; the preview then works only on the machine that has the files.
+
 ### Flags
 
 | Flag | Default | Meaning |
@@ -75,6 +90,7 @@ unwritable cache just falls back to full hashing. `--no-cache` forces that full 
 | `--home DIR` | current user's home | Home directory to scan (mainly for testing). |
 | `--batch-size N` | `100` | Sessions per push request. |
 | `--no-cache` | off | Ignore the local scan cache and re-read and re-hash every transcript. |
+| `--no-upload-files` | off | Don't upload the files a transcript attached. They power the viewer's inline preview, so it falls back to reading the server's own disk without them. |
 | `--dry-run` | off | Report what would be pushed, without pushing. |
 | `--json` | off | Write a machine-readable summary to stdout. |
 | `--quiet` | off | Suppress progress on stderr. |

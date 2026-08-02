@@ -59,7 +59,10 @@ type config struct {
 	quiet     bool
 	batchSize int
 	noCache   bool
-	cachePath string // where the scan cache lives; "" disables persistence
+	// uploadFiles carries the files a transcript attached, so the viewer can
+	// preview them from a machine that never had them.
+	uploadFiles bool
+	cachePath   string // where the scan cache lives; "" disables persistence
 }
 
 func main() {
@@ -94,6 +97,7 @@ func parseFlags(args []string, stdout, stderr io.Writer, getenv func(string) str
 		quiet       = fs.Bool("quiet", false, "suppress progress on stderr")
 		batchSize   = fs.Int("batch-size", defaultBatchSize, "sessions per push request")
 		noCache     = fs.Bool("no-cache", false, "ignore the local scan cache and re-read and re-hash every transcript")
+		noFiles     = fs.Bool("no-upload-files", false, "don't upload the files a transcript attached (they power the viewer's inline preview)")
 		showVersion = fs.Bool("version", false, "print the version and exit")
 	)
 	fs.Var(&sources, "source", "source to sync; repeatable (default: all)")
@@ -133,16 +137,17 @@ func parseFlags(args []string, stdout, stderr io.Writer, getenv func(string) str
 	}
 
 	return config{
-		server:    *server,
-		token:     getenv("AGENT_INGEST_TOKEN"),
-		sources:   selected,
-		home:      *home,
-		dryRun:    *dryRun,
-		jsonOut:   *jsonOut,
-		quiet:     *quiet,
-		batchSize: *batchSize,
-		noCache:   *noCache,
-		cachePath: envOr(getenv, "AGENT_INGEST_CACHE", scan.DefaultCachePath()),
+		server:      *server,
+		token:       getenv("AGENT_INGEST_TOKEN"),
+		sources:     selected,
+		home:        *home,
+		dryRun:      *dryRun,
+		jsonOut:     *jsonOut,
+		quiet:       *quiet,
+		batchSize:   *batchSize,
+		noCache:     *noCache,
+		uploadFiles: !*noFiles,
+		cachePath:   envOr(getenv, "AGENT_INGEST_CACHE", scan.DefaultCachePath()),
 	}, exitOK, false
 }
 
@@ -198,7 +203,7 @@ func run(ctx context.Context, cfg config, stdout, stderr io.Writer) int {
 			continue
 		}
 
-		changed := changedSessions(list, manifest, stderr)
+		changed := changedSessions(list, manifest, cfg.uploadFiles, stderr)
 		sr := sourceReport{Skipped: len(list) - len(changed)}
 
 		// Summary sync is a best-effort layer on top of the transcript sync. If the summary manifest
@@ -264,7 +269,12 @@ func run(ctx context.Context, cfg config, stdout, stderr io.Writer) int {
 // server already stores, so an unchanged corpus uploads nothing. A session the
 // scan cache spared from being read is read here, and only here — sessions the
 // server already has never touch the disk beyond a stat.
-func changedSessions(list []scan.Session, manifest map[string]string, stderr io.Writer) []client.PushSession {
+func changedSessions(
+	list []scan.Session,
+	manifest map[string]string,
+	uploadFiles bool,
+	stderr io.Writer,
+) []client.PushSession {
 	var changed []client.PushSession
 	for i := range list {
 		s := &list[i]
@@ -277,15 +287,38 @@ func changedSessions(list []scan.Session, manifest map[string]string, stderr io.
 			fmt.Fprintf(stderr, "agent-ingest: warning: skipping %s/%s: %s\n", s.Source, s.ID, err)
 			continue
 		}
-		changed = append(changed, client.PushSession{
+		push := client.PushSession{
 			Source:      s.Source,
 			ID:          s.ID,
 			SourceMtime: s.Mtime,
 			Raw:         s.Raw,
 			Summary:     s.Summary,
-		})
+		}
+		if uploadFiles {
+			push.Files = attachmentsFor(s, stderr)
+		}
+		changed = append(changed, push)
 	}
 	return changed
+}
+
+// attachmentsFor reads the files a session's transcript explicitly attached, so
+// the viewer can preview them from any machine. Skips are reported rather than
+// silent: a file left behind because it looks like a secret, or is too large, is
+// something the operator should know about.
+func attachmentsFor(s *scan.Session, stderr io.Writer) []client.PushFile {
+	found, skipped := scan.ReferencedFiles(s.Raw)
+	for _, reason := range skipped {
+		fmt.Fprintf(stderr, "agent-ingest: not attaching %s\n", reason)
+	}
+	if len(found) == 0 {
+		return nil
+	}
+	files := make([]client.PushFile, 0, len(found))
+	for _, a := range found {
+		files = append(files, client.PushFile{Path: a.Path, Content: a.Content})
+	}
+	return files
 }
 
 func groupBySource(sessions []scan.Session) map[string][]scan.Session {

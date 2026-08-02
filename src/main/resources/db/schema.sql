@@ -39,6 +39,22 @@ CREATE TABLE IF NOT EXISTS summaries (
 -- idempotent, so the startup bootstrap applies it on every boot.
 ALTER TABLE summaries ADD COLUMN IF NOT EXISTS content_hash text;
 
+-- Files a transcript explicitly attached, carried with the session by the ingest
+-- client so the inline preview works from any machine. Before this, the preview
+-- read the server's own disk, so it only ever worked when the machine serving the
+-- UI was the machine that ran the agent.
+--
+-- `path` is the absolute path as the transcript spelled it, which is what the
+-- rendered link carries — it is a lookup key here, never a path the server opens.
+CREATE TABLE IF NOT EXISTS session_files (
+    source     text        NOT NULL,
+    session_id text        NOT NULL,
+    path       text        NOT NULL,
+    content    text        NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (source, session_id, path)
+);
+
 -- Saved eval runs. `saved_at` is an ISO-8601 instant, so it doubles as the
 -- delete key and a lexicographic stand-in for chronological order. It is NOT
 -- unique: two runs saved in the same instant are two rows, and deleting by

@@ -40,11 +40,13 @@ class IngestorTest extends PostgresTest {
     private Ingestor ingestor;
 
     private SummaryRepository summaries;
+    private SessionFileRepository sessionFiles;
 
     @BeforeEach
     void setUp() throws SQLException {
         SessionRepository sessions = new SessionRepository(dataSource());
         summaries = new SummaryRepository(dataSource());
+        sessionFiles = new SessionFileRepository(dataSource());
         ingestor =
             new Ingestor(
                 List.of(
@@ -53,10 +55,12 @@ class IngestorTest extends PostgresTest {
                     new ClaudeCodeNormalizer()
                 ),
                 sessions,
-                summaries
+                summaries,
+                sessionFiles
             );
         truncate("sessions");
         truncate("summaries");
+        truncate("session_files");
     }
 
     private static final String ANTIGRAVITY_RAW =
@@ -208,6 +212,65 @@ class IngestorTest extends PostgresTest {
             ingestor.ingestSummaries(List.of(new IngestSummary("antigravity-cli", "s1", body)))
         );
         assertTrue(summaries.find("antigravity-cli", "s1").isPresent());
+    }
+
+    // ----- attached files, so the preview works off the machine that ran the agent -----
+
+    private IngestSession pushWithFiles(String id, List<IngestFile> files) {
+        return new IngestSession("antigravity-cli", id, null, 1L, ANTIGRAVITY_RAW, null, files);
+    }
+
+    @Test
+    void storesTheFilesATrajectoryAttached() {
+        ingestor.ingest(
+            List.of(
+                pushWithFiles(
+                    "s1",
+                    List.of(new IngestFile("/home/dev/project/Parser.java", "class Parser {}"))
+                )
+            )
+        );
+
+        assertEquals(
+            "class Parser {}",
+            sessionFiles.find("antigravity-cli", "s1", "/home/dev/project/Parser.java").orElse(null)
+        );
+    }
+
+    @Test
+    void reIngestingReplacesTheAttachedFilesRatherThanAccumulating() {
+        // The transcript decides which files it references, so one no longer mentioned must stop
+        // being served rather than linger from an earlier push.
+        ingestor.ingest(List.of(pushWithFiles("s1", List.of(new IngestFile("/a.txt", "first")))));
+        ingestor.ingest(List.of(pushWithFiles("s1", List.of(new IngestFile("/b.txt", "second")))));
+
+        assertTrue(sessionFiles.find("antigravity-cli", "s1", "/a.txt").isEmpty());
+        assertEquals("second", sessionFiles.find("antigravity-cli", "s1", "/b.txt").orElse(null));
+    }
+
+    @Test
+    void anOversizedAttachmentIsDroppedButTheRestOfTheSessionSurvives() {
+        // The client bounds these too, but a client is not something the server gets to trust.
+        ingestor.ingest(
+            List.of(
+                pushWithFiles(
+                    "s1",
+                    List.of(
+                        new IngestFile("/huge.log", "x".repeat(Ingestor.MAX_FILE_CHARS + 1)),
+                        new IngestFile("/small.txt", "kept")
+                    )
+                )
+            )
+        );
+
+        assertTrue(sessionFiles.find("antigravity-cli", "s1", "/huge.log").isEmpty());
+        assertEquals("kept", sessionFiles.find("antigravity-cli", "s1", "/small.txt").orElse(null));
+    }
+
+    @Test
+    void aPushCarryingNoFilesLeavesNoAttachments() {
+        ingestor.ingest(List.of(push("antigravity-cli", "s1", ANTIGRAVITY_RAW)));
+        assertTrue(sessionFiles.find("antigravity-cli", "s1", "/anything").isEmpty());
     }
 
     private String storedSteps(String source, String id) throws SQLException {
