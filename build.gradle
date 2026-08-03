@@ -45,8 +45,8 @@ dependencies {
     implementation("dev.langchain4j:langchain4j")
     
     // Micronaut Langchain4j
-    annotationProcessor("io.micronaut.langchain4j:micronaut-langchain4j-processor:2.0.1")
-    implementation("io.micronaut.langchain4j:micronaut-langchain4j-core:2.0.1")
+    annotationProcessor("io.micronaut.langchain4j:micronaut-langchain4j-processor:2.2.0")
+    implementation("io.micronaut.langchain4j:micronaut-langchain4j-core:2.2.0")
 
     // Shared Postgres store: a pooled DataSource + the driver. The repositories use
     // plain JDBC, so the driver is only needed at runtime.
