@@ -22,10 +22,10 @@ services:
     ports: !reset []
 
   app:
-    # `!override` replaces the base mapping rather than appending to it, so 8080 is published once,
+    # `!override` replaces the base mapping rather than appending to it, so 8200 is published once,
     # on every interface. This is the whole point of the file: other machines can now reach it.
     ports: !override
-      - "8080:8080"
+      - "8200:8080"
     environment:
       # Publishing to the LAN without a token would serve every stored trajectory — and let anyone
       # push their own — to any device on the network. `:?` makes Compose refuse to start until both

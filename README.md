@@ -120,7 +120,7 @@ docker compose --profile full up -d --build   # build the app image and start ap
 ```
 
 (The build needs Docker with BuildKit — the default since Docker 23.0.) Then open
-[http://localhost:8080](http://localhost:8080). The app connects to Postgres over the
+[http://localhost:8200](http://localhost:8200). The app connects to Postgres over the
 compose network, so no extra configuration is needed. To use AI summarization, pass a key through —
 `GEMINI_API_KEY=… docker compose --profile full up -d` (or put it in `.env`).
 
@@ -156,7 +156,7 @@ Pushing trajectories still runs on the **host**, because that's where your agent
 point [`agent-ingest`](cli/README.md) at the containerized app:
 
 ```bash
-agent-ingest --server http://localhost:8080
+agent-ingest --server http://localhost:8200
 ```
 
 > [!NOTE]
@@ -211,7 +211,7 @@ another machine, and clients must then send `Authorization: Bearer <token>`.
 
 > [!IMPORTANT]
 > **Upgrading from a version before the loopback default?** The server now listens on `127.0.0.1`
-> only, and `docker compose` publishes 8080 to `127.0.0.1` too. If you were serving other machines,
+> only, and `docker compose` publishes 8200 to `127.0.0.1` too. If you were serving other machines,
 > they will stop reaching it: browsers show an empty page and `agent-ingest --server http://<host>`
 > fails to connect. To restore that deliberately, set `MICRONAUT_SERVER_HOST=0.0.0.0` (and
 > `API_TOKEN` / `INGEST_TOKEN` with it — see below), or widen the compose port mapping. The boot log
@@ -242,7 +242,7 @@ reverse proxy — treat it as exposed and do the following:
   the proxy runs on the same host, keep `INGEST_TOKEN` set — an unauthenticated request forwarded from
   a local proxy is indistinguishable from a genuine localhost client.
 - **Don't publish Postgres, and change its password.** Keep the database on a private network; only
-  the app needs to reach it. The default compose file exposes 5432 for local development with a
+  the app needs to reach it. The default compose file exposes 55433 for local development with a
   well-known password — the production override removes the port mapping and refuses to start until
   `POSTGRES_PASSWORD` is set.
 
@@ -319,22 +319,22 @@ so set it before the first `up`.
 Find the address on the server:
 
 ```bash
-hostname                                  # e.g. "mini" → try http://mini.local:8080 first
+hostname                                  # e.g. "mini" → try http://mini.local:8200 first
 ipconfig getifaddr en0                    # macOS, wired (en1 for Wi-Fi)
 hostname -I | awk '{print $1}'            # Linux
 ipconfig                                  # Windows — the IPv4 address of the active adapter
 ```
 
-`http://<name>.local:8080` works out of the box between Macs; on Linux it needs Avahi, and on
+`http://<name>.local:8200` works out of the box between Macs; on Linux it needs Avahi, and on
 Windows it needs Bonjour. The IP address always works. Check from another computer:
 
 ```bash
-curl http://mini.local:8080/health                       # → {"status":"UP", …}
+curl http://mini.local:8200/health                       # → {"status":"UP", …}
 curl -H "Authorization: Bearer $API_TOKEN" \
-     http://mini.local:8080/api/brain/conversations      # → JSON, not 401
+     http://mini.local:8200/api/brain/conversations      # → JSON, not 401
 ```
 
-- **The UI** — open `http://mini.local:8080`. It prompts once for `API_TOKEN` and remembers it in
+- **The UI** — open `http://mini.local:8200`. It prompts once for `API_TOKEN` and remembers it in
   that browser.
 - **Pushing trajectories** — point `agent-ingest` at the same address with `INGEST_TOKEN`; see
   [cli/README.md](cli/README.md#pointing-it-at-a-shared-visualizer). Run once with `--no-cache` from
@@ -404,7 +404,7 @@ reverse proxy is the only public entrypoint.
    ```bash
    APP_VERSION=$(git describe --tags --always) \
      docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile full up -d --build
-   curl -s localhost:8080/health        # {"status":"UP","version":"<your version>"}
+   curl -s localhost:8200/health        # {"status":"UP","version":"<your version>"}
    ```
 
    `GET /health` reports the running build's version, so you can confirm what's deployed at a glance
@@ -415,7 +415,7 @@ reverse proxy is the only public entrypoint.
    ```
    # Caddyfile
    viz.example.com {
-       reverse_proxy 127.0.0.1:8080
+       reverse_proxy 127.0.0.1:8200
    }
    ```
 
@@ -508,7 +508,7 @@ Every variable below can live in `.env` or be exported as an environment variabl
 
 | Variable            | Default                                        | Description                          |
 | ------------------- | ---------------------------------------------- | ------------------------------------ |
-| `DATABASE_URL`      | `jdbc:postgresql://localhost:5432/agentbrainviz` | JDBC URL of the trajectory store    |
+| `DATABASE_URL`      | `jdbc:postgresql://localhost:55433/agentbrainviz` | JDBC URL of the trajectory store    |
 | `POSTGRES_USER`     | `agentviz`                                     | Store username                       |
 | `POSTGRES_PASSWORD` | `agentviz`                                     | Store password                       |
 | `INGEST_TOKEN`      | _(unset — ingest is open)_                     | Bearer token required by `/api/ingest` |
