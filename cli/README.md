@@ -83,7 +83,7 @@ cd agent-brain-visualizer/cli
 
 go run . --version
 go run . --dry-run                                   # see what would be pushed
-go run . --server http://mini.local:8080             # a real run
+go run . --server http://mini.local:8200             # a real run
 ```
 
 Everything after `go run .` is passed to the CLI, so any flag from the table below works. It
@@ -115,7 +115,7 @@ should push:
 
 ```bash
 # Put both in your shell profile so every run picks them up.
-export AGENT_INGEST_SERVER=http://mini.local:8080
+export AGENT_INGEST_SERVER=http://mini.local:8200
 export AGENT_INGEST_TOKEN=<the server's INGEST_TOKEN>
 
 agent-ingest
@@ -125,13 +125,13 @@ Or per-invocation, with the token still coming from the environment so it never 
 shell history or the process list:
 
 ```bash
-AGENT_INGEST_TOKEN=... agent-ingest --server http://mini.local:8080
+AGENT_INGEST_TOKEN=... agent-ingest --server http://mini.local:8200
 ```
 
 Check it before trusting a schedule:
 
 ```bash
-agent-ingest --server http://mini.local:8080 --dry-run
+agent-ingest --server http://mini.local:8200 --dry-run
 ```
 
 `--dry-run` still contacts the server for the manifest, so it proves the address, the
@@ -139,7 +139,7 @@ token, and the network path all work — without uploading anything. A wrong or 
 token fails with a 401 rather than silently pushing nothing.
 
 **The address.** Use whatever the server answers to on your network: `mini.local` if
-Bonjour/mDNS resolves it, otherwise its LAN IP (`http://192.168.1.50:8080`). Give the
+Bonjour/mDNS resolves it, otherwise its LAN IP (`http://192.168.1.50:8200`). Give the
 server a static or reserved DHCP address if you are putting this in a schedule — a
 machine that changes IP will fail every run until the config is updated. `https://` works
 the same way if the server is behind a TLS-terminating proxy.
@@ -182,7 +182,7 @@ Pass `--no-upload-files` to send none; the preview then works only on the machin
 
 | Flag | Default | Meaning |
 | ---- | ------- | ------- |
-| `--server URL` | `http://localhost:8080` (or `$AGENT_INGEST_SERVER`) | Base URL of the visualizer. |
+| `--server URL` | `http://localhost:8200` (or `$AGENT_INGEST_SERVER`) | Base URL of the visualizer. |
 | `--source NAME` | all | Source to sync; repeatable. One of `antigravity-cli`, `antigravity-ide`, `codex`, `claude-code`. |
 | `--home DIR` | current user's home | Home directory to scan (mainly for testing). |
 | `--batch-size N` | `100` | Sessions per push request. |

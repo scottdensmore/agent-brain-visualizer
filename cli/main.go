@@ -46,7 +46,7 @@ const (
 	exitUsage  = 2 // the command was invoked incorrectly
 )
 
-const defaultServer = "http://localhost:8080"
+const defaultServer = "http://localhost:8200"
 const defaultBatchSize = 100
 
 type config struct {

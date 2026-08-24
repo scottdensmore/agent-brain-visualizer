@@ -34,7 +34,7 @@ micronaut:
 # POSTGRES_USER / POSTGRES_PASSWORD (real env var first, then `.env`).
 datasources:
   default:
-    url: "jdbc:postgresql://localhost:5432/agentbrainviz"
+    url: "jdbc:postgresql://localhost:55433/agentbrainviz"
     username: agentviz
     password: agentviz
     driver-class-name: org.postgresql.Driver

@@ -24,10 +24,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env — the dev default is not allowed in production}
 
   app:
-    # `!override` replaces the base list rather than appending to it, so 8080 isn't also left published
+    # `!override` replaces the base list rather than appending to it, so 8200 isn't also left published
     # on all interfaces. Bind to localhost only — a reverse proxy (nginx / Caddy / a cloud LB) fronts
     # it and terminates TLS.
     ports: !override
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8200:8080"
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env — the dev default is not allowed in production}
