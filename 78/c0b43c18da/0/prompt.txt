@@ -1,0 +1,5 @@
+Lets remove the workflow from AGENTS.md and the subagents and skills associated with them from this project. Then rewrite AGENTS.md based on current state of the project.
+
+---
+
+Yes

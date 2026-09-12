@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.10.6",
+  "checkpoint_id": "78c0b43c18da",
+  "strategy": "manual-commit",
+  "branch": "chore/remove-agent-workflow",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "AGENTS.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/78/c0b43c18da/0/metadata.json",
+      "transcript": "/78/c0b43c18da/0/full.jsonl",
+      "compact_transcript": "/78/c0b43c18da/0/transcript.jsonl",
+      "content_hash": "/78/c0b43c18da/0/content_hash.txt",
+      "prompt": "/78/c0b43c18da/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 101729,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1103104,
+    "output_tokens": 13994,
+    "api_call_count": 19
+  }
+}
