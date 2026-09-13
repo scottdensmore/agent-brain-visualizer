@@ -585,8 +585,7 @@ it picks up a `.env` from the directory you launch it from (or use environment v
 
 ## Development & Tests
 
-Four suites cover the app; CI runs all of them (plus a native-image smoke test and a Docker image
-build-and-boot smoke) on every pull request:
+Four test suites cover the app:
 
 ```bash
 mise exec -- ./gradlew build   # backend JUnit + Spotless (format check)
