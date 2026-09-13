@@ -1,8 +1,8 @@
 plugins {
     id("io.micronaut.application") version "5.0.2"
-    id("com.gradleup.shadow") version "9.4.1"
+    id("com.gradleup.shadow") version "9.6.1"
     id("io.micronaut.aot") version "5.0.2"
-    id("com.diffplug.spotless") version "6.25.0"
+    id("com.diffplug.spotless") version "8.9.0"
 }
 
 version = System.getenv("GITHUB_REF_NAME") ?: "0.1-SNAPSHOT"
@@ -36,7 +36,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     
     // LangChain4j BOM
-    implementation(platform("dev.langchain4j:langchain4j-bom:1.18.0"))
+    implementation(platform("dev.langchain4j:langchain4j-bom:1.18.1"))
 
     // LangChain4j Google GenAI
     implementation("dev.langchain4j:langchain4j-google-genai")
@@ -45,8 +45,8 @@ dependencies {
     implementation("dev.langchain4j:langchain4j")
     
     // Micronaut Langchain4j
-    annotationProcessor("io.micronaut.langchain4j:micronaut-langchain4j-processor:2.0.1")
-    implementation("io.micronaut.langchain4j:micronaut-langchain4j-core:2.0.1")
+    annotationProcessor("io.micronaut.langchain4j:micronaut-langchain4j-processor:2.2.0")
+    implementation("io.micronaut.langchain4j:micronaut-langchain4j-core:2.2.0")
 
     // Shared Postgres store: a pooled DataSource + the driver. The repositories use
     // plain JDBC, so the driver is only needed at runtime.
