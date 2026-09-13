@@ -1,7 +1,7 @@
 [tools]
 # The Micronaut 5 Gradle plugins and the project's source compatibility require a Java 25 JVM.
 java = "temurin-25"
-# Match CI (.github/workflows/ci.yml): Node powers the frontend unit and Playwright e2e suites.
+# Node powers the frontend unit and Playwright e2e suites.
 node = "22"
-# Match cli/go.mod (which CI's setup-go also tracks) for the agent-ingest CLI.
+# Match cli/go.mod for the agent-ingest CLI.
 go = "1.26"

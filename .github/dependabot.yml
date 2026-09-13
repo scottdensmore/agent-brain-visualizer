@@ -1,5 +1,5 @@
-# Weekly dependency-update PRs for every ecosystem in the repo: the frontend/e2e npm packages, the
-# backend's Gradle dependencies, the agent-ingest Go module, and the actions the workflows pin.
+# Weekly dependency-update PRs for ecosystems in the repo: the frontend/e2e npm packages, the
+# backend's Gradle dependencies, and the agent-ingest Go module.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -14,10 +14,5 @@ updates:
 
   - package-ecosystem: gomod
     directory: /cli
-    schedule:
-      interval: weekly
-
-  - package-ecosystem: github-actions
-    directory: /
     schedule:
       interval: weekly
