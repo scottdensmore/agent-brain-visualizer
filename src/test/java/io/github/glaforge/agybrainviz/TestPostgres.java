@@ -15,6 +15,9 @@
  */
 package io.github.glaforge.agybrainviz;
 
+import com.github.dockerjava.api.model.ExposedPort;
+import com.github.dockerjava.api.model.PortBinding;
+import com.github.dockerjava.api.model.Ports;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.util.Map;
@@ -38,7 +41,18 @@ final class TestPostgres {
 
     static synchronized PostgreSQLContainer<?> container() {
         if (container == null) {
-            container = new PostgreSQLContainer<>("postgres:17-alpine");
+            container =
+                new PostgreSQLContainer<>("postgres:17-alpine")
+                    .withCreateContainerCmdModifier(cmd ->
+                        cmd
+                            .getHostConfig()
+                            .withPortBindings(
+                                new PortBinding(
+                                    Ports.Binding.bindIpAndPort("127.0.0.1", 0),
+                                    new ExposedPort(5432)
+                                )
+                            )
+                    );
             container.start();
         }
         return container;
