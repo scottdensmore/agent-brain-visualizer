@@ -86,4 +86,6 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Install test browser on disposable runner
         run: npx playwright install --with-deps chromium
+      - name: Build server before Playwright starts webServer
+        run: go build -o build/agy-brain-viz .
       - run: npm run e2e
