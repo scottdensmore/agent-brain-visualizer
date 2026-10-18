@@ -16,7 +16,7 @@ This visualizer parses those raw JSONL brain transcripts and renders them in a s
 ## How it works
 The visualizer reads agent sessions from a shared [Postgres store](#the-trajectory-store--postgres). Trajectories get there by being **pushed**: the [`agent-ingest`](cli/README.md) CLI scans a machine's local transcripts (Antigravity, OpenAI Codex, Claude Code) and uploads them to the app, which normalizes and stores them. So a session captured on one computer is visible from any machine pointed at the same store. When you select a session from the sidebar, the application renders its normalized steps into interactive sequences.
 
-Additionally, it leverages Google's Gemini LLMs to automatically generate comprehensive executive summaries of long conversations—distilling thousands of lines of transcript into the core user intent, key technical decisions, and the final outcome of the session. These summaries are cached in the store, so a summary generated on one machine is available on the others.
+Additionally, it leverages Google's Gemini LLMs (or a local Ollama model) to automatically generate comprehensive executive summaries of long conversations—distilling thousands of lines of transcript into the core user intent, key technical decisions, and the final outcome of the session. These summaries are cached in the store, so a summary generated on one machine is available on the others.
 
 ### Key Features
 
@@ -50,20 +50,20 @@ Additionally, it leverages Google's Gemini LLMs to automatically generate compre
 *   **In-Transcript Search**: A find-in-page text search utility to navigate through text matches within the active transcript.
 
 **AI Summarization**
-*   **Backend Integration**: The Micronaut backend integrates with an LLM via LangChain4j — either the hosted **Google Gemini** API or a **local Ollama** model (see [Running the Application](#running-the-application-from-sources)).
+*   **Backend Integration**: The Go backend integrates directly with either the hosted **Google Gemini** REST API or a **local Ollama** model (see [Running the Application](#running-the-application-from-sources)).
 *   **Session Summaries**: Analyzes raw JSONL transcripts via LLM to generate a high-level overview of the agent's actions and outcomes.
 *   **Summary Panel**: The generated summary is injected into a collapsible panel at the top of the transcript view.
 
 ## Technology Stack & Implementation
-This project prioritizes a lightweight, high-performance, and maintainable architecture:
+This project prioritizes a lightweight, high-performance, zero-dependency, and maintainable architecture:
 
-- **Backend**: Built with [Micronaut](https://micronaut.io/) (Java). It serves the frontend static assets, receives pushed trajectories at its ingest API (normalizing each tool's format into a shared schema), and serves the session list, transcripts, and analyses from a Postgres store via plain JDBC.
-- **AI Integration**: Powered by [LangChain4j](https://github.com/langchain4j/langchain4j) connecting directly to [Google Gemini models](https://docs.langchain4j.dev/integrations/language-models/google-genai/). It uses chunking and recursive consolidation to process large transcript files that exceed standard token limits.
-- **Frontend**: A zero-build Vanilla JavaScript, HTML, and CSS single-page application. It avoids heavy framework overhead, relying instead on standard browser DOM APIs, customized CSS grid/flexbox layouts, and minimal dependencies (`marked.js` and `highlight.js`) for efficient rendering and responsiveness.
+- **Backend & CLI**: Built in pure **Go** (`go 1.26`, standard library only, zero external Go module dependencies). Both the `agy-brain-viz` web server (with embedded static assets via `embed.FS`) and the `agent-ingest` CLI live in a single unified Go module. The server receives pushed trajectories at its ingest API (normalizing each tool's format into a shared schema) and serves the session list, transcripts, and analyses from a Postgres store via a pure-Go PostgreSQL v3 wire driver.
+- **AI Integration**: Connects directly to the Google Gemini `generateContent` JSON-schema API or a local Ollama `/api/chat` endpoint. It uses token-aware chunking, parallel chunk fan-out, recursive map-reduce consolidation, and untrusted-input nonce fencing to safely process large transcript files.
+- **Frontend**: A zero-build Vanilla JavaScript, HTML, and CSS single-page application embedded directly in the Go binary (`web/public`). It avoids heavy framework overhead, relying instead on standard browser DOM APIs, customized CSS grid/flexbox layouts, and minimal dependencies (`marked.js` and `highlight.js`) for efficient rendering and responsiveness.
 
 ## Installation
 
-The easiest way to install and use the Agent Brain Visualizer is to download the pre-compiled native executable for your operating system.
+The easiest way to install and use the Agent Brain Visualizer is to download the pre-compiled native executable for your operating system, or install via Go:
 
 1. Navigate to the [Releases](https://github.com/scottdensmore/agent-brain-visualizer/releases) section of this repository.
 2. Download the appropriate `.zip` asset for your OS (macOS, Linux, or Windows).
@@ -72,24 +72,17 @@ The easiest way to install and use the Agent Brain Visualizer is to download the
 5. Run it directly from your terminal.
 6. Open your web browser and navigate to [http://localhost:8080](http://localhost:8080) to view the interface.
 
-Alternatively, you can clone this repository and run or build it locally from source.
+Alternatively, you can clone this repository and run or build it locally from source with Go.
 
 ## Running the Application (from Sources)
 
 ### Prerequisites
 
-Building from source requires **Java 25** — the Micronaut 5 Gradle plugins and the project's source
-level both need it. The repo pins its toolchain — the JDK, plus the Node and Go that the tests and
-CLI use — with [`mise`](https://mise.jdx.dev/) (see `mise.toml`):
+Building from source requires **Go 1.26+**. The repo pins its toolchain — Go plus Node.js for the frontend/e2e tests — with [`mise`](https://mise.jdx.dev/) (see `mise.toml`):
 
 ```bash
-mise install    # provisions temurin-25 (plus node and go) once
+mise install    # provisions go and node once
 ```
-
-With `mise` active, `./gradlew …` automatically uses Java 25. If you don't use `mise`, put a Java 25
-JDK on your `PATH`, or prefix Gradle commands with `mise exec -- ` (e.g. `mise exec -- ./gradlew run`).
-Running an older JDK fails at configuration time with *"Dependency requires at least JVM runtime
-version 25"*. (Node.js is only needed for the frontend/e2e tests — see [Development & Tests](#development--tests).)
 
 You also need **Docker**, for the Postgres store described next.
 
@@ -111,16 +104,15 @@ endpoints that need the store with a `503`.
 
 #### Run the whole stack in Docker
 
-To run the **app and the database together** in Docker — no Java or Gradle needed on the host — use
+To run the **app and the database together** in Docker — no Go toolchain needed on the host — use
 the `full` profile. The app image is built from the checked-in `Dockerfile` (a two-stage build that
-compiles the fat jar and runs it on a slim JRE):
+compiles the static `agy-brain-viz` and `agent-ingest` Go binaries and runs in a minimal Alpine image):
 
 ```bash
 docker compose --profile full up -d --build   # build the app image and start app + Postgres
 ```
 
-(The build needs Docker with BuildKit — the default since Docker 23.0.) Then open
-[http://localhost:8200](http://localhost:8200). The app connects to Postgres over the
+Then open [http://localhost:8200](http://localhost:8200). The app connects to Postgres over the
 compose network, so no extra configuration is needed. To use AI summarization, pass a key through —
 `GEMINI_API_KEY=… docker compose --profile full up -d` (or put it in `.env`).
 
@@ -165,7 +157,7 @@ agent-ingest --server http://localhost:8200
 > the host's `~/.gemini`, which the container can't see. Everything served
 > from the store — sessions, transcripts, analyses, insights — works normally.
 
-For **database-only** development (running the app on the host with `./gradlew run` against a
+For **database-only** development (running the app on the host with `go run .` against a
 containerized Postgres), start just the database — that's the default, so the `app` service stays
 out of the way:
 
@@ -181,7 +173,7 @@ any language — can contribute the sessions its agents recorded.
 The supplied client is [`agent-ingest`](cli/README.md), a single Go binary. Install it from a
 [release](https://github.com/scottdensmore/agent-brain-visualizer/releases/latest), with `go install
 github.com/scottdensmore/agent-brain-visualizer/cli@latest`, or run it straight from a checkout with
-`go run .` — see [Install](cli/README.md#install) for all four routes and
+`go run ./cli` — see [Install](cli/README.md#install) for all four routes and
 [Pointing it at a shared visualizer](cli/README.md#pointing-it-at-a-shared-visualizer) for connecting
 it to a server on your network.
 
@@ -210,23 +202,22 @@ another machine, and clients must then send `Authorization: Bearer <token>`.
 #### Securing an exposed deployment
 
 > [!IMPORTANT]
-> **Upgrading from a version before the loopback default?** The server now listens on `127.0.0.1`
-> only, and `docker compose` publishes 8200 to `127.0.0.1` too. If you were serving other machines,
+> **Upgrading from a version before the loopback default?** The server listens on `127.0.0.1`
+> only by default, and `docker compose` publishes 8200 to `127.0.0.1` too. If you were serving other machines,
 > they will stop reaching it: browsers show an empty page and `agent-ingest --server http://<host>`
 > fails to connect. To restore that deliberately, set `MICRONAUT_SERVER_HOST=0.0.0.0` (and
 > `API_TOKEN` / `INGEST_TOKEN` with it — see below), or widen the compose port mapping. The boot log
 > states which address it is listening on in every case.
 
-The defaults now keep the server on this machine: `micronaut.server.host` is `127.0.0.1`, so nothing
+The defaults keep the server on this machine: the default bind host is `127.0.0.1`, so nothing
 else can reach it whether or not a token is set. That is what makes the open-by-default auth filters
-safe — previously nothing enforced the "localhost only" the code assumed, and the shipped default
-served every stored trajectory to anyone who could route a packet to the port.
+safe.
 
 The moment you deliberately widen that — `MICRONAUT_SERVER_HOST`, a wider compose mapping, or a
 reverse proxy — treat it as exposed and do the following:
 
 - **Set `INGEST_TOKEN`.** Without it, the write endpoints are open to anyone who can reach the port,
-  and a large pushed body can pin significant heap (the request is buffered whole). The server logs a
+  and a large pushed body can pin significant memory. The server logs a
   warning at startup whenever ingest is unauthenticated, so watch the boot log. Give the same token to
   `agent-ingest` via `AGENT_INGEST_TOKEN`.
 - **Set `API_TOKEN`.** It guards everything that isn't ingest: the stored transcripts, and the
@@ -246,11 +237,6 @@ reverse proxy — treat it as exposed and do the following:
   well-known password — the production override removes the port mapping and refuses to start until
   `POSTGRES_PASSWORD` is set.
 
-> [!NOTE]
-> The eval run history previously lived in `~/.agybrainviz/eval-runs.jsonl`. That file is no longer
-> read, so a history saved before this change won't appear. Nothing deletes it — you can remove it
-> by hand once you're happy.
-
 #### Serving your own network (a Mac mini, NAS, or spare PC)
 
 The setup this is built for: one always-on machine runs the stack in Docker, and every laptop and
@@ -264,7 +250,7 @@ a network you trust. `docker-compose.lan.yml` is the overlay that does it.
 
 ##### 1. What the machine needs
 
-Only Docker and git — no Java, Node, or Gradle, since the image builds itself.
+Only Docker and git — no Go or Node needed on the host, since the image builds itself.
 
 | | |
 | --- | --- |
@@ -279,8 +265,7 @@ silently.
 ##### 2. Set it up
 
 Run this **on the server**, not on your laptop. Building there produces an image for that machine's
-own architecture, which matters on Apple silicon — an image built on an x86 PC would run under
-emulation, and a JVM under emulation is genuinely slow.
+own architecture.
 
 ```bash
 git clone https://github.com/scottdensmore/agent-brain-visualizer
@@ -297,8 +282,7 @@ echo "GEMINI_API_KEY=your-key-here" >> .env
 docker compose -f docker-compose.yml -f docker-compose.lan.yml --profile full up -d --build
 ```
 
-The first build takes a few minutes; after that `docker compose ... up -d` is seconds. Watch it come
-up with `docker compose logs -f app`, and look for the two posture lines:
+Watch it come up with `docker compose logs -f app`, and look for the two posture lines:
 
 ```
 INFO  ApiSecurityAdvisory    - The read/compute API requires a bearer token (API_TOKEN); listening on 0.0.0.0 …
@@ -306,13 +290,6 @@ INFO  IngestSecurityAdvisory - Ingest endpoints require a bearer token (INGEST_T
 ```
 
 If either says **UNAUTHENTICATED**, a token didn't reach the container — fix that before going on.
-
-**What the overlay changes.** It publishes the app on every interface (the base compose keeps it on
-loopback, which is right for a laptop and wrong for a server), keeps Postgres off the network
-entirely, and forces the fail-closed auth flags. It **refuses to start without both tokens**:
-publishing to a LAN without them would serve every stored trajectory — and accept pushes — from any
-device on the network. `POSTGRES_PASSWORD` is read only when the database volume is first created,
-so set it before the first `up`.
 
 ##### 3. Reach it from your other machines
 
@@ -325,8 +302,7 @@ hostname -I | awk '{print $1}'            # Linux
 ipconfig                                  # Windows — the IPv4 address of the active adapter
 ```
 
-`http://<name>.local:8200` works out of the box between Macs; on Linux it needs Avahi, and on
-Windows it needs Bonjour. The IP address always works. Check from another computer:
+Check from another computer:
 
 ```bash
 curl http://mini.local:8200/health                       # → {"status":"UP", …}
@@ -337,48 +313,7 @@ curl -H "Authorization: Bearer $API_TOKEN" \
 - **The UI** — open `http://mini.local:8200`. It prompts once for `API_TOKEN` and remembers it in
   that browser.
 - **Pushing trajectories** — point `agent-ingest` at the same address with `INGEST_TOKEN`; see
-  [cli/README.md](cli/README.md#pointing-it-at-a-shared-visualizer). Run once with `--no-cache` from
-  each machine, so sessions it already scanned get pushed with their attached files.
-
-If `/health` doesn't answer from another machine but does on the server itself, it's a firewall.
-macOS may prompt to allow incoming connections the first time. On Linux, note that Docker's
-publishing rules sit **ahead of** `ufw`, so the port is usually reachable even when ufw would deny
-it — which is exactly why the tokens are mandatory here.
-
-##### 4. Keep it running
-
-`restart: unless-stopped` brings the containers back after a reboot, but only once the Docker daemon
-is running:
-
-- **macOS** — enable *Start Docker Desktop when you sign in* in Docker Desktop's settings (OrbStack
-  has the same option). The machine must also reach the desktop, so turn off auto-sleep for an
-  always-on server: **System Settings → Energy** (or `sudo pmset -a sleep 0 disksleep 0`).
-- **Linux** — `sudo systemctl enable docker`.
-- **Windows** — enable *Start Docker Desktop when you log in*.
-
-##### 5. Update and back up
-
-```bash
-# Update to the latest version:
-cd agent-brain-visualizer && git pull
-docker compose -f docker-compose.yml -f docker-compose.lan.yml --profile full up -d --build
-
-# Back up the store (everything ingested lives in Postgres):
-docker exec agent-brain-viz-db pg_dump -U agentviz --data-only agentbrainviz \
-  | gzip > backup-$(date +%F).sql.gz
-
-# Restore into a fresh stack — start it first, then load the rows:
-gunzip -c backup-2026-08-01.sql.gz \
-  | docker exec -i agent-brain-viz-db psql -q -U agentviz agentbrainviz
-```
-
-`pg_dump` rather than copying the volume: it is consistent while the database is running, and the
-volume survives `docker compose down` anyway — only `down -v` destroys it.
-
-`--data-only` because the app recreates its own schema on every boot, so a dump carrying `CREATE
-TABLE` would restore into tables that already exist and spray `ERROR: relation already exists` —
-the rows still land, but the noise makes a working restore look broken. Restore into a **fresh**
-stack: loading rows on top of existing ones collides on the primary keys.
+  [cli/README.md](cli/README.md#pointing-it-at-a-shared-visualizer).
 
 #### Remote / production deployment
 
@@ -407,9 +342,6 @@ reverse proxy is the only public entrypoint.
    curl -s localhost:8200/health        # {"status":"UP","version":"<your version>"}
    ```
 
-   `GET /health` reports the running build's version, so you can confirm what's deployed at a glance
-   (the CLI reports its own with `agent-ingest --version`).
-
 3. **Terminate TLS at a reverse proxy** — Caddy gets you HTTPS with almost no config:
 
    ```
@@ -419,21 +351,12 @@ reverse proxy is the only public entrypoint.
    }
    ```
 
-   See **Securing an exposed deployment** above for the full checklist (token, fail-closed, don't
-   publish Postgres — the override already handles that last one).
-
-4. **Push from each machine that has agent transcripts** — the transcripts live on your dev machines,
-   not the server:
+4. **Push from each machine that has agent transcripts**:
 
    ```bash
    export AGENT_INGEST_TOKEN=<the same token>
    agent-ingest --server https://viz.example.com
    ```
-
-   Install `agent-ingest` from a [release](cli/README.md#install), or build it from source.
-
-The `pgdata` volume keeps the store across restarts and rebuilds. To update: `git pull` and re-run the
-same `up -d --build` command; the data is untouched.
 
 ### Configuration — the `.env` file
 
@@ -444,7 +367,7 @@ cp .env.example .env    # then put your API key / provider in .env
 ```
 
 The app reads `.env` from the directory you launch it from (the process's working directory), so it
-works the same for `./gradlew run`, the fat jar, and the native executable. A few rules:
+works the same for `go run .` and the compiled binary. A few rules:
 
 * **Real environment variables always win over `.env`** — export a variable to override a value for
   a single run.
@@ -452,8 +375,6 @@ works the same for `./gradlew run`, the fat jar, and the native executable. A fe
 * Pass `-Ddotenv.enabled=false` to ignore the file entirely, or `-Ddotenv.path=<path>` to load it
   from somewhere else. (The test and e2e runs disable it, so a local `.env` can never change what
   the tests see.)
-
-Prefer not to use a file? Just `export` the same variables — every option below works either way.
 
 The transcript analysis can be powered by either the remote **Google Gemini** API (default) or a
 **local model served by [Ollama](https://ollama.com/)** (e.g. Gemma) — no API key or network
@@ -471,10 +392,10 @@ GEMINI_API_KEY=your-api-key-here
 …then start the app:
 
 ```bash
-./gradlew run
+go run .
 ```
 
-(Equivalently: `export GEMINI_API_KEY="your-api-key-here" && ./gradlew run`.)
+(Equivalently: `export GEMINI_API_KEY="your-api-key-here" && go run .`.)
 
 ### Option B — Local model via Ollama
 
@@ -487,7 +408,7 @@ OLLAMA_MODEL=gemma4          # optional; defaults to gemma4
 
 ```bash
 ollama pull gemma4           # or any Gemma tag you prefer
-./gradlew run
+go run .
 ```
 
 No `GEMINI_API_KEY` is needed in this mode.
@@ -504,35 +425,26 @@ Every variable below can live in `.env` or be exported as an environment variabl
 | `OLLAMA_BASE_URL` | ollama     | `http://localhost:11434` | Ollama server URL                            |
 | `OLLAMA_MODEL`    | ollama     | `gemma4`                 | Local model tag to use                       |
 
-#### Store configuration reference
+#### Store & Server configuration reference
 
 | Variable            | Default                                        | Description                          |
 | ------------------- | ---------------------------------------------- | ------------------------------------ |
-| `DATABASE_URL`      | `jdbc:postgresql://localhost:55433/agentbrainviz` | JDBC URL of the trajectory store    |
+| `DATABASE_URL`      | `jdbc:postgresql://localhost:55433/agentbrainviz` | Postgres URL (`jdbc:postgresql://...` or `postgres://...`) |
 | `POSTGRES_USER`     | `agentviz`                                     | Store username                       |
 | `POSTGRES_PASSWORD` | `agentviz`                                     | Store password                       |
 | `INGEST_TOKEN`      | _(unset — ingest is open)_                     | Bearer token required by `/api/ingest` |
 | `INGEST_REQUIRE_AUTH` | `false`                                      | When `true`, refuse all ingest until `INGEST_TOKEN` is set (fail closed) |
 | `API_TOKEN`         | _(unset — open, but loopback-only by default)_ | Bearer token required by the rest of `/api` (transcripts, summarize, mine, eval, optimize); the web UI prompts for it once |
 | `API_REQUIRE_AUTH`  | `false`                                        | When `true`, refuse those endpoints until `API_TOKEN` is set (fail closed) |
-| `MICRONAUT_SERVER_HOST` | `127.0.0.1`                                | Bind address. The default keeps the server on this machine; set `0.0.0.0` (with tokens) to serve others |
-| `LOG_APPENDER`      | `CONSOLE_TEXT` (the container defaults to `CONSOLE_JSON`) | Exactly `CONSOLE_TEXT` (readable colorized logs) or `CONSOLE_JSON` (one structured JSON object per line) |
+| `MICRONAUT_SERVER_HOST` / `SERVER_HOST` | `127.0.0.1`                | Bind address. The default keeps the server on this machine; set `0.0.0.0` (with tokens) to serve others |
+| `MICRONAUT_SERVER_PORT` / `SERVER_PORT` | `8080`                     | Bind port                            |
 
 Once the server starts, open your web browser and navigate to [http://localhost:8080](http://localhost:8080) to interact with the visualizer.
-
-**Logs.** By default the server prints human-readable, colorized logs — right for a dev terminal.
-Set `LOG_APPENDER=CONSOLE_JSON` for structured logs — one JSON object per line, in logback's native
-schema (a numeric epoch-millis `timestamp`, `level`, `loggerName`, `formattedMessage`, `mdc`, and a
-`throwable` with the stack trace on errors; not ECS/Logstash field names) — that a log aggregator can
-parse. The Docker `full` profile turns this on automatically; set `LOG_APPENDER=CONSOLE_TEXT` there to
-get readable container logs back. The value must be exactly one of those two names — a typo leaves the
-root logger with no appender, so logging goes silent. This runtime switch applies to the JVM (the
-Docker image and `./gradlew run`); the native binary bakes its config at build time and logs in text.
 
 ### Listening on Other Interfaces
 
 The server binds `127.0.0.1` by default, so only this machine can reach it. To serve other machines,
-set `MICRONAUT_SERVER_HOST` — and set `API_TOKEN` and `INGEST_TOKEN` at the same time, because the
+set `MICRONAUT_SERVER_HOST` (or `SERVER_HOST` or `--host`) — and set `API_TOKEN` and `INGEST_TOKEN` at the same time, because the
 auth filters are open when no token is configured:
 
 ```dotenv
@@ -541,75 +453,52 @@ API_TOKEN=<openssl rand -hex 32>
 INGEST_TOKEN=<a different one>
 ```
 
-The boot log names the address it is listening on and whether the API requires a token, so the
-posture is visible without reading the config. Under `docker compose` the container already binds
-`0.0.0.0` internally (it has to — otherwise the published port would be unreachable); what decides
-who can reach it there is the port mapping, which publishes to `127.0.0.1` by default.
-
 ### Customizing the Port
 
-Set `MICRONAUT_SERVER_PORT` — in `.env`:
+Set `MICRONAUT_SERVER_PORT` (or `SERVER_PORT` or `--port`) — in `.env`:
 
 ```dotenv
 MICRONAUT_SERVER_PORT=9090
 ```
 
-…or as an environment variable:
+…or on the command line:
 
 ```bash
-export MICRONAUT_SERVER_PORT=9090
-./gradlew run
+go run . --port 9090
+# or:
+./build/agy-brain-viz -Dmicronaut.server.port=9090
 ```
 
-*(If you are running the compiled native executable directly, you can also append `-Dmicronaut.server.port=9090` to the command).*
+## Building Standalone Executables
 
-## Building a Native Executable
-
-Because this project is built with Micronaut, you can compile it into a highly-optimized, standalone native executable using GraalVM. 
-
-1. Ensure you have [GraalVM](https://www.graalvm.org/) installed and set up as your active Java environment.
-2. Run the native compilation task:
+Compile both the server (`agy-brain-viz`) and CLI (`agent-ingest`) into standalone native binaries using `go build`:
 
 ```bash
-./gradlew nativeCompile
+mkdir -p build
+go build -ldflags "-s -w -X main.version=$(git describe --tags --always)" -o build/agy-brain-viz .
+go build -ldflags "-s -w -X main.version=$(git describe --tags --always)" -o build/agent-ingest ./cli
 ```
 
-This generates a native executable in the `build/native/nativeCompile/` directory. Run it directly —
-it picks up a `.env` from the directory you launch it from (or use environment variables):
+Run the server binary directly — it embeds all static web assets and SQL schema, and picks up a `.env` from the working directory:
 
 ```bash
-./build/native/nativeCompile/agy-brain-viz
+./build/agy-brain-viz
 ```
-
-*(Note: Start-up times will be practically instantaneous compared to the standard JVM version).*
 
 ## Development & Tests
 
-Four test suites cover the app:
+Three test suites cover the entire project:
 
 ```bash
-mise exec -- ./gradlew build   # backend JUnit + Spotless (format check)
+go test -race ./...            # all Go unit, integration, Postgres wire-protocol, CLI, and full-stack E2E tests
 npm install                    # once, for the frontend/e2e tests
-npm test                       # frontend unit tests (Vitest)
-docker compose up -d           # the store the e2e jar talks to
-mise exec -- npm run e2e       # end-to-end (Playwright) against a booted jar with seeded fixtures
-cd cli && go test ./...        # the agent-ingest CLI (Go)
+npm test                       # frontend unit tests (Vitest, 137 tests across 13 suites)
+docker compose up -d           # the Postgres store the Playwright browser suite talks to
+npm run e2e                    # browser end-to-end tests (Playwright) against the Go server binary
 ```
 
-**The tests need Docker running.** Nothing is faked: the store tests exercise a real Postgres rather
-than an in-memory stand-in, because H2's Postgres mode supports neither `jsonb` nor the conditional
-`ON CONFLICT … WHERE` the store relies on — an in-memory database would test something the app never
-talks to.
-
-* `./gradlew build` starts its **own** Postgres via
-  [Testcontainers](https://testcontainers.com/) and applies the real `db/schema.sql` to it. It does
-  not use, or care about, your `docker compose` container — a suite that passed or failed depending
-  on what happened to be listening on port 5432 would be worse than no suite at all.
-* `npm run e2e` boots the packaged jar, which talks to a real database, so that one **does** need
-  `docker compose up -d` first. Run it under `mise exec` so the jar gets Java 25.
-
-Code is auto-formatted by Spotless (prettier-java + prettier for JS); run `mise exec -- ./gradlew
-spotlessApply` before committing.
+* `go test -race ./...` is completely self-contained and runs with zero external services: it includes an in-process PostgreSQL v3 wire-protocol test server (`internal/pgtest`) that exercises the real `database/sql` wire driver (`internal/pgdriver`), `schema.sql`, `ON CONFLICT` upserts, `jsonb` validation, and transaction semantics, plus full-stack HTTP and CLI-to-server E2E tests.
+* `npm run e2e` automatically builds `build/agy-brain-viz` (if not already present), boots it against `docker compose up -d`, seeds fixtures via `/api/ingest`, and runs the Playwright Chromium suite.
 
 ## License
 This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.

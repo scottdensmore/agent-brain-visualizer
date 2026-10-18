@@ -30,6 +30,7 @@ import (
 
 	"github.com/scottdensmore/agent-brain-visualizer/cli/internal/client"
 	"github.com/scottdensmore/agent-brain-visualizer/cli/internal/scan"
+	"github.com/scottdensmore/agent-brain-visualizer/internal/testhttp"
 )
 
 // sha reuses the scanner's hash so the test asserts against the real contract.
@@ -98,7 +99,7 @@ func newFakeServer() *fakeServer {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]int{"ingested": len(batch), "skipped": 0, "failed": 0})
 	})
-	f.srv = httptest.NewServer(mux)
+	f.srv = testhttp.NewServer(mux)
 	return f
 }
 
@@ -434,7 +435,7 @@ func TestSelectsASingleSource(t *testing.T) {
 }
 
 func TestServerErrorExitsNonZero(t *testing.T) {
-	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	down := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer down.Close()
@@ -475,7 +476,7 @@ func TestAFailedSourceIsReportedNotHiddenAsNoSessions(t *testing.T) {
 	// Regression: a source whose manifest fetch fails used to be dropped from the
 	// report, so stdout printed "No sessions found" (and --json hid the failure)
 	// even though sessions existed and the run exited non-zero.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -497,7 +498,7 @@ func TestAFailedSourceIsReportedNotHiddenAsNoSessions(t *testing.T) {
 }
 
 func TestJSONMarksFailureWithOkFalse(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
@@ -561,7 +562,7 @@ func TestNonUTF8TranscriptIsIngestedOnceThenSkipped(t *testing.T) {
 	stored := map[string]string{}
 	var mu sync.Mutex
 	var pushes int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/ingest/manifest" {
 			mu.Lock()
 			_ = json.NewEncoder(w).Encode(stored)
@@ -784,7 +785,7 @@ func TestCleartextTokenOverHTTPWarnsOnlyForNonLoopbackHosts(t *testing.T) {
 
 func TestTokenComesFromTheEnvironment(t *testing.T) {
 	var gotAuth string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		if strings.HasSuffix(r.URL.Path, "/manifest") {
 			_, _ = w.Write([]byte("{}"))

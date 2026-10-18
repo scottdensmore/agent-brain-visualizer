@@ -1,5 +1,5 @@
-# Weekly dependency-update PRs for ecosystems in the repo: the frontend/e2e npm packages, the
-# backend's Gradle dependencies, and the agent-ingest Go module.
+# Weekly dependency-update PRs for ecosystems in the repo: the frontend/e2e npm packages and the
+# root Go module (which builds both agy-brain-viz and agent-ingest).
 version: 2
 updates:
   - package-ecosystem: npm
@@ -7,12 +7,7 @@ updates:
     schedule:
       interval: weekly
 
-  - package-ecosystem: gradle
-    directory: /
-    schedule:
-      interval: weekly
-
   - package-ecosystem: gomod
-    directory: /cli
+    directory: /
     schedule:
       interval: weekly

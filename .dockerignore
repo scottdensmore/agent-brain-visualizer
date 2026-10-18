@@ -1,22 +1,17 @@
-# Keep the build context small and clean: exclude VCS, build outputs, local caches, the Go
-# CLI (not part of the app image), and secrets. What's left is the Gradle project the image builds.
+# Keep the build context small and clean: exclude VCS, build outputs, local caches,
+# frontend test node_modules, and secrets. What's left is the Go module the image builds.
 .git
 .github
-.gradle
 build
 bin
-out
-target
+dist
 
-# Node / e2e (the app image doesn't build the frontend tests)
+# Node / e2e (the app image doesn't run the frontend tests)
 node_modules
 test-results
 playwright-report
 blob-report
 playwright/.cache
-
-# The Go CLI is a separate artifact, not part of the app image
-cli
 
 # Local tooling / editor state
 .idea
@@ -29,7 +24,7 @@ cli
 .env.*
 !.env.example
 
-# Docs and images aren't needed to build the jar
+# Docs and images aren't needed to build the Go binaries
 *.md
 screenshot.png
 logo.svg

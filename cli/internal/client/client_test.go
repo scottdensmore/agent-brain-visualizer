@@ -20,11 +20,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/scottdensmore/agent-brain-visualizer/internal/testhttp"
 )
 
 // newFastRetryClient returns a client whose retry backoff is near-instant, so
@@ -36,7 +37,7 @@ func newFastRetryClient(baseURL string) *Client {
 }
 
 func TestManifestParsesTheIdToHashMap(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/api/ingest/manifest" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
@@ -64,7 +65,7 @@ func TestManifestLargerThanOneMiBRoundTripsUntruncated(t *testing.T) {
 	for i := 0; i < 16000; i++ {
 		want[fmt.Sprintf("session-%05d", i)] = hashLike(i)
 	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(want)
 	}))
 	defer srv.Close()
@@ -89,7 +90,7 @@ func hashLike(i int) string {
 
 func TestTransientServerErrorsAreRetried(t *testing.T) {
 	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if calls.Add(1) <= 2 {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = io.WriteString(w, `{"error":"try again"}`)
@@ -113,7 +114,7 @@ func TestTransientServerErrorsAreRetried(t *testing.T) {
 
 func TestClientErrorsAreNotRetried(t *testing.T) {
 	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = io.WriteString(w, `{"error":"malformed batch"}`)
@@ -130,7 +131,7 @@ func TestClientErrorsAreNotRetried(t *testing.T) {
 
 func TestRetriesGiveUpAfterTheAttemptBudget(t *testing.T) {
 	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
@@ -147,7 +148,7 @@ func TestRetriesGiveUpAfterTheAttemptBudget(t *testing.T) {
 func TestPushRetryResendsTheFullBody(t *testing.T) {
 	var calls atomic.Int32
 	var retriedBody []PushSession
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var batch []PushSession
 		_ = json.NewDecoder(r.Body).Decode(&batch)
 		if calls.Add(1) == 1 {
@@ -176,7 +177,7 @@ func TestPushRetryResendsTheFullBody(t *testing.T) {
 
 func TestPushSendsTheBatchAndReturnsCounts(t *testing.T) {
 	var body []PushSession
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/ingest/sessions" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
@@ -203,7 +204,7 @@ func TestPushSendsTheBatchAndReturnsCounts(t *testing.T) {
 
 func TestPushSerializesTheServersFieldNames(t *testing.T) {
 	var raw map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var arr []map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&arr)
 		if len(arr) > 0 {
@@ -229,7 +230,7 @@ func TestPushSerializesTheServersFieldNames(t *testing.T) {
 
 func TestPushSummaryFieldIsSentWhenSetAndOmittedWhenEmpty(t *testing.T) {
 	var payloads []map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var arr []map[string]any
 		_ = json.NewDecoder(r.Body).Decode(&arr)
 		payloads = arr
@@ -253,7 +254,7 @@ func TestPushSummaryFieldIsSentWhenSetAndOmittedWhenEmpty(t *testing.T) {
 }
 
 func TestSummaryManifestParsesTheIdToHashMap(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/ingest/summaries/manifest" {
 			t.Errorf("unexpected path %s", r.URL.Path)
 		}
@@ -275,7 +276,7 @@ func TestSummaryManifestParsesTheIdToHashMap(t *testing.T) {
 
 func TestPushSummariesSendsTheBatchWithTheServersFieldNames(t *testing.T) {
 	var raw map[string]any
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/api/ingest/summaries" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
@@ -306,7 +307,7 @@ func TestPushSummariesSendsTheBatchWithTheServersFieldNames(t *testing.T) {
 
 func TestAuthorizationHeaderSentOnlyWhenTokenSet(t *testing.T) {
 	var auth string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth = r.Header.Get("Authorization")
 		_, _ = io.WriteString(w, `{}`)
 	}))
@@ -323,7 +324,7 @@ func TestAuthorizationHeaderSentOnlyWhenTokenSet(t *testing.T) {
 }
 
 func TestNon2xxIsAnErrorNotASilentEmptyResult(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = io.WriteString(w, `{"error":"database unreachable"}`)
 	}))
@@ -338,7 +339,7 @@ func TestNon2xxIsAnErrorNotASilentEmptyResult(t *testing.T) {
 }
 
 func TestUnauthorizedIsReportedClearly(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := testhttp.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = io.WriteString(w, `{"error":"Ingest requires a valid Authorization: Bearer <INGEST_TOKEN>."}`)
 	}))
