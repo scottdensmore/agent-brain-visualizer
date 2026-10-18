@@ -383,6 +383,31 @@ func TestSessionRejectsInvalidJSONB(t *testing.T) {
 	}
 }
 
+func TestSessionSanitizesNullBytesForPostgres(t *testing.T) {
+	db, _ := setupTestDB(t)
+	sessions := store.NewSessionRepository(db)
+
+	s := store.Session{
+		Source:      "codex",
+		ID:          "nul-session",
+		Title:       "Title with\x00nul",
+		SourceMtime: 1000,
+		StepsJSON:   `[{"type":"FUNCTION_OUTPUT","content":"binary\u0000out and literal \\u0000 kept"}]`,
+		ContentHash: "h-nul",
+	}
+	wrote, err := sessions.Upsert(s)
+	if err != nil || !wrote {
+		t.Fatalf("Upsert with NUL escape = (%v, %v), want (true, nil)", wrote, err)
+	}
+	steps, ok, err := sessions.Steps("codex", "nul-session")
+	if err != nil || !ok {
+		t.Fatalf("Steps = (%q, %v, %v), want found", steps, ok, err)
+	}
+	if !strings.Contains(steps, "binaryout") || !strings.Contains(steps, `\\u0000`) {
+		t.Errorf("Steps = %q, want unescaped \\u0000 stripped and escaped \\\\u0000 preserved", steps)
+	}
+}
+
 // --- SummaryRepository tests (ported from SummaryRepositoryTest.java) ---
 
 func TestSummaryFindReturnsWhatWasWritten(t *testing.T) {

@@ -367,6 +367,7 @@ func (s *Server) handleFlavors(w http.ResponseWriter, r *http.Request) {
 	writeJSONStatus(w, http.StatusOK, []string{
 		"antigravity-cli",
 		"antigravity-ide",
+		"antigravity",
 		"codex",
 		"claude-code",
 	})

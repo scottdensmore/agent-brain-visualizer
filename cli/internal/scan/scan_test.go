@@ -76,20 +76,27 @@ func TestScanDerivesStableIdsAcrossSources(t *testing.T) {
 	write(t, filepath.Join(agLogs, "transcript.jsonl"), "OLD")
 	write(t, filepath.Join(agLogs, "transcript_full.jsonl"), "FULL")
 
+	// Antigravity Hub / 2.0: lives under ~/.gemini/antigravity/brain.
+	hubLogs := filepath.Join(home, ".gemini/antigravity/brain/hub-1/.system_generated/logs")
+	write(t, filepath.Join(hubLogs, "transcript.jsonl"), "HUB")
+
 	sessions, err := Scan(home, AllSources)
 	if err != nil {
 		t.Fatal(err)
 	}
 	got := byKey(sessions)
 
-	if len(sessions) != 3 {
-		t.Fatalf("expected 3 sessions, got %d: %v", len(sessions), keys(got))
+	if len(sessions) != 4 {
+		t.Fatalf("expected 4 sessions, got %d: %v", len(sessions), keys(got))
 	}
 	if _, ok := got["claude-code/cc-uuid-1"]; !ok {
 		t.Errorf("missing claude-code session; got %v", keys(got))
 	}
 	if _, ok := got["codex/rollout-x-sess"]; !ok {
 		t.Errorf("missing codex session; got %v", keys(got))
+	}
+	if _, ok := got["antigravity/hub-1"]; !ok {
+		t.Errorf("missing antigravity session; got %v", keys(got))
 	}
 	ag, ok := got["antigravity-cli/sess-1"]
 	if !ok {
