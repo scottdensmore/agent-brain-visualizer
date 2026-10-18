@@ -40,12 +40,13 @@ var warnWriter io.Writer = os.Stderr
 const (
 	SourceAntigravityCLI = "antigravity-cli"
 	SourceAntigravityIDE = "antigravity-ide"
+	SourceAntigravity    = "antigravity"
 	SourceCodex          = "codex"
 	SourceClaudeCode     = "claude-code"
 )
 
 // AllSources is every source the CLI knows how to scan, in listing order.
-var AllSources = []string{SourceAntigravityCLI, SourceAntigravityIDE, SourceCodex, SourceClaudeCode}
+var AllSources = []string{SourceAntigravityCLI, SourceAntigravityIDE, SourceAntigravity, SourceCodex, SourceClaudeCode}
 
 // Tool-owned cache directory this CLI's server writes next to a source's
 // sessions; it holds summaries, never transcripts, so never descend into it.
@@ -113,7 +114,7 @@ func ScanWithCache(home string, sources []string, cache *Cache) ([]Session, erro
 			sessions, err = scanFlat(source, filepath.Join(home, ".claude", "projects"), cache)
 		case SourceCodex:
 			sessions, err = scanFlat(source, filepath.Join(home, ".codex", "sessions"), cache)
-		case SourceAntigravityCLI, SourceAntigravityIDE:
+		case SourceAntigravityCLI, SourceAntigravityIDE, SourceAntigravity:
 			sessions, err = scanAntigravity(source, filepath.Join(home, ".gemini", source, "brain"), cache)
 		default:
 			return nil, fmt.Errorf("unknown source %q (known: %s)", source, strings.Join(AllSources, ", "))

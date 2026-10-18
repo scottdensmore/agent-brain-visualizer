@@ -163,6 +163,39 @@ ORDER BY s.updated_at DESC, s.id
 LIMIT $2`
 )
 
+func sanitizePostgresText(s string) string {
+	if !strings.Contains(s, "\x00") {
+		return s
+	}
+	return strings.ReplaceAll(s, "\x00", "")
+}
+
+// sanitizePostgresJSONB strips literal NUL bytes and unescaped \u0000 JSON sequences,
+// which PostgreSQL jsonb rejects with SQLSTATE 22P05 ("unsupported Unicode escape sequence").
+func sanitizePostgresJSONB(s string) string {
+	s = sanitizePostgresText(s)
+	if !strings.Contains(s, `\u0000`) {
+		return s
+	}
+	var sb strings.Builder
+	sb.Grow(len(s))
+	for i := 0; i < len(s); {
+		if i+6 <= len(s) && s[i:i+6] == `\u0000` {
+			backslashes := 0
+			for j := i - 1; j >= 0 && s[j] == '\\'; j-- {
+				backslashes++
+			}
+			if backslashes%2 == 0 {
+				i += 6
+				continue
+			}
+		}
+		sb.WriteByte(s[i])
+		i++
+	}
+	return sb.String()
+}
+
 // Upsert inserts the session or updates it when its content_hash changed.
 // Returns true if a row was inserted or updated, or false if an identical hash was already stored.
 func (r *SessionRepository) Upsert(s Session) (bool, error) {
@@ -170,7 +203,9 @@ func (r *SessionRepository) Upsert(s Session) (bool, error) {
 		return false, &StoreUnavailableError{Message: "Could not store session " + s.ID}
 	}
 	updatedAt := time.UnixMilli(s.SourceMtime).UTC()
-	res, err := r.db.Exec(sessionUpsertSQL, s.Source, s.ID, s.Title, updatedAt, s.StepsJSON, s.ContentHash, s.SourceMtime)
+	title := sanitizePostgresText(s.Title)
+	stepsJSON := sanitizePostgresJSONB(s.StepsJSON)
+	res, err := r.db.Exec(sessionUpsertSQL, s.Source, s.ID, title, updatedAt, stepsJSON, s.ContentHash, s.SourceMtime)
 	if err != nil {
 		return false, &StoreUnavailableError{Message: "Could not store session " + s.ID, Cause: err}
 	}
@@ -366,12 +401,12 @@ func (r *SummaryRepository) Upsert(source, id, summaryJSON, title string) (bool,
 		return false, &StoreUnavailableError{Message: "Could not store the summary for " + id}
 	}
 	var titleArg any
-	trimmedTitle := strings.TrimSpace(title)
+	trimmedTitle := strings.TrimSpace(sanitizePostgresText(title))
 	if trimmedTitle != "" {
 		titleArg = trimmedTitle
 	}
 	hash := Sha256Hex(summaryJSON)
-	res, err := r.db.Exec(summaryUpsertSQL, source, id, summaryJSON, titleArg, hash)
+	res, err := r.db.Exec(summaryUpsertSQL, source, id, sanitizePostgresJSONB(summaryJSON), titleArg, hash)
 	if err != nil {
 		return false, &StoreUnavailableError{Message: "Could not store the summary for " + id, Cause: err}
 	}
@@ -463,7 +498,7 @@ func (r *SessionFileRepository) ReplaceForSession(source, sessionID string, file
 		return &StoreUnavailableError{Message: "Could not store the attached files for " + sessionID, Cause: err}
 	}
 	for _, f := range files {
-		if _, err := tx.Exec(sessionFileUpsertSQL, source, sessionID, f.Path, f.Content); err != nil {
+		if _, err := tx.Exec(sessionFileUpsertSQL, source, sessionID, sanitizePostgresText(f.Path), sanitizePostgresText(f.Content)); err != nil {
 			return &StoreUnavailableError{Message: "Could not store the attached files for " + sessionID, Cause: err}
 		}
 	}

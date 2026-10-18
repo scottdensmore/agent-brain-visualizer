@@ -183,7 +183,7 @@ Pass `--no-upload-files` to send none; the preview then works only on the machin
 | Flag | Default | Meaning |
 | ---- | ------- | ------- |
 | `--server URL` | `http://localhost:8200` (or `$AGENT_INGEST_SERVER`) | Base URL of the visualizer. |
-| `--source NAME` | all | Source to sync; repeatable. One of `antigravity-cli`, `antigravity-ide`, `codex`, `claude-code`. |
+| `--source NAME` | all | Source to sync; repeatable. One of `antigravity-cli`, `antigravity-ide`, `antigravity`, `codex`, `claude-code`. |
 | `--home DIR` | current user's home | Home directory to scan (mainly for testing). |
 | `--batch-size N` | `100` | Sessions per push request. |
 | `--no-cache` | off | Ignore the local scan cache and re-read and re-hash every transcript. |
