@@ -21,7 +21,6 @@ cli
 # Local tooling / editor state
 .idea
 .vscode
-.entire
 .codex
 .cursor
 
