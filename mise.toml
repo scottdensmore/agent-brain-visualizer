@@ -1,7 +1,29 @@
 [tools]
-# The Micronaut 5 Gradle plugins and the project's source compatibility require a Java 25 JVM.
-java = "temurin-25"
-# Node powers the frontend unit and Playwright e2e suites.
-node = "22"
-# Match cli/go.mod for the agent-ingest CLI.
+# Go powers both the Agent Brain Visualizer server and the agent-ingest CLI.
 go = "1.26"
+# Node powers the frontend unit (Vitest) and Playwright e2e suites.
+node = "22"
+
+[tasks.build]
+description = "Build the agy-brain-viz server and agent-ingest CLI binaries into build/"
+run = [
+  "mkdir -p build",
+  "go build -o build/agy-brain-viz .",
+  "go build -o build/agent-ingest ./cli",
+]
+
+[tasks.run]
+description = "Run the Agent Brain Visualizer server from source"
+run = "go run ."
+
+[tasks.test]
+description = "Run all Go unit, integration, and E2E tests"
+run = "go test -race ./..."
+
+[tasks."test:js"]
+description = "Run frontend Vitest unit tests"
+run = "npm test"
+
+[tasks."test:e2e"]
+description = "Run Playwright browser end-to-end tests"
+run = "npm run e2e"

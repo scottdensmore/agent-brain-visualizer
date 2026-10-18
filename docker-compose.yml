@@ -11,7 +11,7 @@
 #     docker compose down        # stop, keeping the database volume
 #     docker compose down -v     # stop and WIPE the database
 #
-# The credentials below match the defaults in `.env.example`, so `./gradlew run` (or the app
+# The credentials below match the defaults in `.env.example`, so `go run .` (or the app
 # container) works against this database with no extra configuration.
 services:
   postgres:
@@ -28,7 +28,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agentviz}
     ports:
       # Loopback only, so the well-known dev credentials above are reachable just from this machine
-      # (`./gradlew run`, `npm run e2e`, psql on the host). A bare "5432:5432" would bind 0.0.0.0, and
+      # (`go run .`, `npm run e2e`, psql on the host). A bare "5432:5432" would bind 0.0.0.0, and
       # Docker's publishing rules sit ahead of host firewalls like ufw — anyone on the LAN could then
       # log into the dev database with the credentials published in this repository.
       - "127.0.0.1:55433:5432"
@@ -53,7 +53,7 @@ services:
     container_name: agent-brain-viz-app
     restart: unless-stopped
     # Only starts with `--profile full`, so the default `docker compose up` stays database-only for
-    # local development (where you run the app with `./gradlew run` on the host).
+    # local development (where you run the app with `go run .` on the host).
     profiles: ["full"]
     depends_on:
       postgres:
@@ -77,9 +77,6 @@ services:
       # the web UI prompts for it once and remembers it in the browser.
       API_TOKEN: ${API_TOKEN:-}
       API_REQUIRE_AUTH: ${API_REQUIRE_AUTH:-}
-      # Structured JSON logs by default in the container (one object per line, for a log aggregator).
-      # Override with LOG_APPENDER=CONSOLE_TEXT for human-readable container logs.
-      LOG_APPENDER: ${LOG_APPENDER:-CONSOLE_JSON}
     ports:
       # Loopback only, like the postgres mapping above and the production override. A bare
       # "8080:8080" binds 0.0.0.0, and Docker's publishing rules sit ahead of host firewalls like
@@ -88,14 +85,13 @@ services:
       # tokens and widen this mapping.
       - "127.0.0.1:8200:8080"
     healthcheck:
-      # No curl in the JRE image, so use bash's /dev/tcp to make a minimal HTTP request to the
-      # liveness probe and confirm a 200. Liveness (not readiness) on purpose: the app serves the UI
-      # even when the store is down, so a database blip must not mark the container unhealthy.
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8080 && printf \"GET /health HTTP/1.0\\r\\n\\r\\n\" >&3 && grep -q \"200 OK\" <&3'"]
+      # Liveness (not readiness) on purpose: the app serves the UI even when the store is down, so a
+      # database blip must not mark the container unhealthy.
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/health | grep -q '\"UP\"'"]
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 40s
+      start_period: 10s
 
 volumes:
   pgdata:

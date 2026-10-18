@@ -8,7 +8,7 @@ process.env.TZ = process.env.TZ || "UTC";
 export default defineConfig({
   test: {
     environment: "jsdom",
-    include: ["src/test/js/**/*.test.js"],
-    setupFiles: ["src/test/js/setup.js"],
+    include: ["web/test/**/*.test.js"],
+    setupFiles: ["web/test/setup.js"],
   },
 });

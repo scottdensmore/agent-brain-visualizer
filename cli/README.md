@@ -64,14 +64,14 @@ go install github.com/scottdensmore/agent-brain-visualizer/cli@latest
 
 ```bash
 git clone https://github.com/scottdensmore/agent-brain-visualizer
-cd agent-brain-visualizer/cli
+cd agent-brain-visualizer
 
 # Stamp the version so --version reports which build you're running:
-go build -ldflags "-X main.version=$(git describe --tags --always)" -o agent-ingest .
+go build -ldflags "-X main.version=$(git describe --tags --always)" -o agent-ingest ./cli
 ./agent-ingest --version        # e.g. agent-ingest v0.3.0-24-gcbd6548
 ```
 
-A plain `go build -o agent-ingest .` works too; it just reports `dev`.
+A plain `go build -o agent-ingest ./cli` works too; it just reports `dev`.
 
 ### `go run`, without installing anything
 
@@ -79,11 +79,11 @@ Useful for trying it once, or while working on the CLI itself — it compiles an
 leaving no binary behind:
 
 ```bash
-cd agent-brain-visualizer/cli
+cd agent-brain-visualizer
 
-go run . --version
-go run . --dry-run                                   # see what would be pushed
-go run . --server http://mini.local:8200             # a real run
+go run ./cli --version
+go run ./cli --dry-run                                   # see what would be pushed
+go run ./cli --server http://mini.local:8200             # a real run
 ```
 
 Everything after `go run .` is passed to the CLI, so any flag from the table below works. It

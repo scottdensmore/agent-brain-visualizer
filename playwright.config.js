@@ -5,17 +5,16 @@ import { fileURLToPath } from "node:url";
 const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 const PORT = 8099;
 const E2E_HOME = path.join(projectRoot, "build", "e2e-home");
+const BIN_NAME = process.platform === "win32" ? "agy-brain-viz.exe" : "agy-brain-viz";
+const BIN_PATH = path.join(projectRoot, "build", BIN_NAME);
 
-// Launch the prebuilt fat jar with user.home pointed at the seeded fixtures. A dummy GEMINI_API_KEY
+// Launch the Go server binary with user.home pointed at the seeded fixtures. A dummy GEMINI_API_KEY
 // lets the cached-analysis path run without contacting the real LLM (the cache lookup is gated
-// behind the key check). `find` (not a top-level glob) locates the jar even when the project
-// version embeds a slash — e.g. a PR's GITHUB_REF_NAME of "1/merge" nests the jar in a subdir.
-// `-Ddotenv.enabled=false` keeps the run hermetic: the jar boots in the project root, so a
-// developer's local .env would otherwise be picked up and change the app's AI configuration.
+// behind the key check). `-Ddotenv.enabled=false` keeps the run hermetic: the binary boots in the
+// project root, so a developer's local .env would otherwise be picked up and change the app's AI
+// configuration.
 const serverCommand =
-  `sh -c 'java -Duser.home="${E2E_HOME}" -Dmicronaut.server.port=${PORT} ` +
-  `-Ddotenv.enabled=false ` +
-  `-jar "$(find build/libs -name "*-all.jar" | head -1)"'`;
+  `"${BIN_PATH}" -Duser.home="${E2E_HOME}" -Dmicronaut.server.port=${PORT} -Ddotenv.enabled=false`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -46,8 +45,8 @@ export default defineConfig({
     command: serverCommand,
     url: `http://localhost:${PORT}/api/brain/conversations`,
     // Locally reuse a running server for speed. Note: globalSetup re-seeds the fixture files (the
-    // controllers read them per-request) but does NOT restart the server, so if you change the jar
-    // or the -Duser.home target, kill the server on :8099 first. CI always starts fresh.
+    // controllers read them per-request) but does NOT restart the server, so if you rebuild the
+    // binary or change the -Duser.home target, kill the server on :8099 first. CI always starts fresh.
     reuseExistingServer: !process.env.CI,
     timeout: 90_000,
     env: { GEMINI_API_KEY: "dummy-e2e-key", TZ: "UTC" },
