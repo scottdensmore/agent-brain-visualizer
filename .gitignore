@@ -36,7 +36,8 @@ coverage.txt
 *.zip
 *.tar.gz
 
-# IDEs
+# IDEs & build caches
+.gradle/
 .idea/
 *.iml
 *.ipr
